@@ -79,7 +79,7 @@ async def get_welcome_audio():
 async def handle_inbound_query(req: InboundQueryRequest):
     """
     Handles fast 1-second inbound caller text queries.
-    Detects language -> Queries DB -> Speaks back in same language.
+    Detects language -> Queries DB -> Speaks back in same language via Edge-TTS.
     """
     raw_text = req.text.strip()
     hint = req.language_hint
@@ -89,7 +89,7 @@ async def handle_inbound_query(req: InboundQueryRequest):
         lang = hint
     else:
         lower = raw_text.lower()
-        if any(w in lower for w in ["che", "bhav", "aaje", "shu", "tamare", "jovu", "kaho", "shukriya", "aavjo", "ભાવ", "રેટ"]):
+        if any(w in lower for w in ["che", "bhav", "aaje", "shu", "tamare", "jovu", "kaho", "shukriya", "aavjo", "ભાવ", "રેટ", "સોનું"]):
             lang = "gu"
         elif any(w in lower for w in ["kya", "hai", "batao", "chahiye", "kitna", "namaste", "bhaiya", "sone", "सोना", "कैरेट", "भाव"]):
             lang = "hi"
@@ -99,7 +99,7 @@ async def handle_inbound_query(req: InboundQueryRequest):
     # Process through Inbound Brain (Groq LLM or Resilient DB matcher)
     reply_text, action, intent = brain_llm.get_inbound_response(raw_text, lang)
 
-    # Synthesize Audio Speech
+    # Synthesize Audio Speech using Natural Edge-TTS
     temp_id = str(uuid.uuid4())[:8]
     output_filename = f"reply_{temp_id}.mp3"
     output_path = os.path.join(AUDIO_DIR, output_filename)
@@ -143,7 +143,6 @@ async def get_key_status():
 if __name__ == "__main__":
     import uvicorn
     print("\n===========================================================")
-    print("💎 ROYAL HERITAGE JEWELLERS - INBOUND AI RECEPTIONIST 💎")
     print("💎 SHASHVAT JEWELS PVT LTD - INBOUND AI RECEPTIONIST 💎")
     print("Live on: http://localhost:8055")
     print("===========================================================\n")
