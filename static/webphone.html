@@ -103,50 +103,36 @@
       color: var(--text-dim);
     }
 
-    /* 1-2-3 Keypad Buttons */
-    .keypad-container {
+    /* Auto-Detect Language & Barge-In Badges */
+    .auto-lang-badge {
       width: 100%;
       margin: 12px 0 6px 0;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-    .keypad-label {
-      font-size: 10px;
-      font-weight: 700;
-      color: var(--gold-primary);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      text-align: center;
-    }
-    .keypad-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      gap: 6px;
-    }
-    .btn-keypad {
-      background: #0A0D14;
-      border: 1px solid var(--border-color);
-      color: var(--text-main);
-      padding: 6px 4px;
-      border-radius: 8px;
+      background: rgba(229, 184, 66, 0.08);
+      border: 1px solid rgba(229, 184, 66, 0.3);
+      border-radius: 12px;
+      padding: 8px 12px;
       font-size: 11px;
-      font-weight: 600;
-      cursor: pointer;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      transition: all 0.2s;
-    }
-    .btn-keypad span.key-num {
-      font-size: 13px;
-      font-weight: 800;
       color: var(--gold-primary);
+      text-align: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
     }
-    .btn-keypad.selected {
-      background: rgba(229, 184, 66, 0.25);
-      border-color: var(--gold-primary);
-      box-shadow: 0 0 10px var(--gold-glow);
+    .pulsing-dot {
+      color: #38ef7d;
+      font-size: 14px;
+      animation: pulse 1s infinite;
+    }
+    .barge-in-badge {
+      font-size: 10px;
+      color: #38ef7d;
+      background: rgba(56, 239, 125, 0.1);
+      border: 1px solid rgba(56, 239, 125, 0.3);
+      border-radius: 6px;
+      padding: 2px 6px;
+      margin-left: 4px;
+      font-weight: 700;
     }
 
     .status-pill {
@@ -366,23 +352,11 @@
       <div class="receptionist-name">Aarohi</div>
       <div class="receptionist-sub">Shashvat Jewels Receptionist</div>
 
-      <!-- 1-2-3 Language Keypad -->
-      <div class="keypad-container">
-        <div class="keypad-label">Language:</div>
-        <div class="keypad-row">
-          <button class="btn-keypad selected" id="key1" data-lang="gu">
-            <span class="key-num">1</span>
-            ગુજરાતી
-          </button>
-          <button class="btn-keypad" id="key2" data-lang="hi">
-            <span class="key-num">2</span>
-            हिंदी
-          </button>
-          <button class="btn-keypad" id="key3" data-lang="en">
-            <span class="key-num">3</span>
-            English
-          </button>
-        </div>
+      <!-- Instant Auto-Detect Mode -->
+      <div class="auto-lang-badge">
+        <span class="pulsing-dot">●</span>
+        <span>AI Auto-Detect: <strong>Gujarati • Hindi • English</strong></span>
+        <span class="barge-in-badge">Smart Barge-In</span>
       </div>
 
       <div class="status-pill" id="statusPill">Line Ready &bull; Click Green Call Button</div>
@@ -483,18 +457,15 @@
   <script>
     let isCallActive = false;
     let recognition = null;
-    let currentLang = "gu";
+    let currentLang = "auto";
     let isProcessing = false;
+    let isAgentSpeaking = false;
 
     const btnCall = document.getElementById("btnCall");
     const btnEnd = document.getElementById("btnEnd");
     const statusPill = document.getElementById("statusPill");
     const transcriptWindow = document.getElementById("transcriptWindow");
     const audioPlayer = document.getElementById("audioPlayer");
-
-    const key1 = document.getElementById("key1");
-    const key2 = document.getElementById("key2");
-    const key3 = document.getElementById("key3");
 
     const tabTranscript = document.getElementById("tabTranscript");
     const tabCheatSheet = document.getElementById("tabCheatSheet");
@@ -561,19 +532,6 @@
       }
     }
 
-    // 1-2-3 Keypad selection
-    function selectKeypadLang(lang) {
-      currentLang = lang;
-      [key1, key2, key3].forEach(btn => btn.classList.remove("selected"));
-      if (lang === "gu") key1.classList.add("selected");
-      if (lang === "hi") key2.classList.add("selected");
-      if (lang === "en") key3.classList.add("selected");
-
-      if (isCallActive) {
-        restartListening();
-      }
-    }
-
     const btnQuickSend = document.getElementById("btnQuickSend");
     const quickTextInput = document.getElementById("quickTextInput");
 
@@ -583,8 +541,13 @@
       quickTextInput.value = "";
       if (!isCallActive) {
         btnCall.click();
-        setTimeout(() => handleCustomerSpeech(q), 800);
+        setTimeout(() => handleCustomerSpeech(q), 600);
       } else {
+        if (isAgentSpeaking && audioPlayer && !audioPlayer.paused) {
+          audioPlayer.pause();
+          audioPlayer.currentTime = 0;
+          isAgentSpeaking = false;
+        }
         handleCustomerSpeech(q);
       }
     });
@@ -592,10 +555,6 @@
     quickTextInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") btnQuickSend.click();
     });
-
-    key1.addEventListener("click", () => selectKeypadLang("gu"));
-    key2.addEventListener("click", () => selectKeypadLang("hi"));
-    key3.addEventListener("click", () => selectKeypadLang("en"));
 
     // Animate soundwave
     setInterval(() => {
@@ -605,23 +564,21 @@
       });
     }, 120);
 
-    // Call Pickup (Hands-Free)
+    // Call Pickup (Instant Hands-Free + Smart Barge-In)
     btnCall.addEventListener("click", async () => {
       isCallActive = true;
       btnCall.style.display = "none";
       btnEnd.style.display = "flex";
-      statusPill.textContent = "Call Connected • Aarohi Welcoming...";
+      statusPill.textContent = "● Live Inbound Call • Speak naturally (Auto-Detect)";
       statusPill.className = "status-pill connected";
 
-      // Play pre-cached welcome audio
-      appendBubble("ai", "Namaste! Welcome to Shashvat Jewels. How may I assist you with our diamond and gold collection today? Gujarati maate 1, Hindi ke liye 2, for English press 3, or simply start speaking!");
+      // Start listening IMMEDIATELY so caller can speak anytime
+      startListeningHandsFree();
+
+      // Play pre-cached clean welcome audio
+      appendBubble("ai", "Namaste! Welcome to Shashvat Jewels. How may I assist you with our diamond and gold collection today?");
       
-      playAudio("/audio/inbound_welcome.mp3", () => {
-        // Once welcome finishes, immediately start listening hands-free!
-        if (isCallActive) {
-          startListeningHandsFree();
-        }
-      });
+      playAudio("/audio/inbound_welcome.mp3");
     });
 
     // Call Hangup
@@ -632,6 +589,7 @@
     function hangupCall(reason = "Call Disconnected") {
       isCallActive = false;
       isProcessing = false;
+      isAgentSpeaking = false;
       btnCall.style.display = "flex";
       btnEnd.style.display = "none";
       statusPill.textContent = reason;
@@ -639,72 +597,94 @@
       if (recognition) {
         try { recognition.stop(); } catch(e){}
       }
-      if (audioPlayer) audioPlayer.pause();
+      if (audioPlayer) {
+        audioPlayer.pause();
+        audioPlayer.currentTime = 0;
+      }
     }
 
-    // Hands-Free Speech Recognition Engine
+    // Hands-Free Speech Recognition Engine with SMART BARGE-IN
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-    function getSpeechLangCode() {
-      if (currentLang === "gu") return "gu-IN";
-      if (currentLang === "hi") return "hi-IN";
-      return "en-IN";
-    }
-
     function startListeningHandsFree() {
-      if (!isCallActive || isProcessing) return;
+      if (!isCallActive) return;
 
       if (!SpeechRecognition) {
         alert("Please use Chrome or Edge browser for live hands-free calling.");
         return;
       }
 
+      if (recognition) {
+        try { recognition.stop(); } catch(e){}
+      }
+
       try {
         recognition = new SpeechRecognition();
-        recognition.lang = getSpeechLangCode();
-        recognition.interimResults = false;
+        // gu-IN captures Gujarati, Hindi, and English loan words
+        recognition.lang = "gu-IN";
+        recognition.interimResults = true;
+        recognition.continuous = true;
         recognition.maxAlternatives = 1;
 
-        statusPill.textContent = `🟢 Listening in ${currentLang === 'gu' ? 'Gujarati' : currentLang === 'hi' ? 'Hindi' : 'English'}... Speak now!`;
-        statusPill.className = "status-pill listening";
+        // SMART BARGE-IN: If caller starts speaking at ANY time, CUT AGENT OFF IMMEDIATELY!
+        recognition.onspeechstart = () => {
+          if (isAgentSpeaking && audioPlayer && !audioPlayer.paused) {
+            console.log("[BARGE-IN] Caller started speaking! Interrupted agent audio.");
+            audioPlayer.pause();
+            audioPlayer.currentTime = 0;
+            isAgentSpeaking = false;
+            statusPill.textContent = "🎙️ You are speaking • Aarohi listening...";
+            statusPill.className = "status-pill listening";
+          }
+        };
 
         recognition.onresult = async (event) => {
-          const userSaid = event.results[0][0].transcript;
-          if (userSaid && userSaid.trim()) {
+          // If agent was talking, cut off immediately!
+          if (isAgentSpeaking && audioPlayer && !audioPlayer.paused) {
+            audioPlayer.pause();
+            audioPlayer.currentTime = 0;
+            isAgentSpeaking = false;
+          }
+
+          let finalTranscript = "";
+          for (let i = event.resultIndex; i < event.results.length; ++i) {
+            if (event.results[i].isFinal) {
+              finalTranscript += event.results[i][0].transcript;
+            }
+          }
+
+          const userSaid = finalTranscript.trim();
+          if (userSaid && !isProcessing) {
             isProcessing = true;
-            try { recognition.stop(); } catch(e){}
+            statusPill.textContent = "⚡ Aarohi Thinking & Replying...";
+            statusPill.className = "status-pill speaking";
             await handleCustomerSpeech(userSaid);
           }
         };
 
         recognition.onerror = (event) => {
           if (isCallActive && !isProcessing) {
-            setTimeout(startListeningHandsFree, 500);
+            setTimeout(startListeningHandsFree, 300);
           }
         };
 
         recognition.onend = () => {
           if (isCallActive && !isProcessing) {
-            setTimeout(startListeningHandsFree, 300);
+            setTimeout(startListeningHandsFree, 200);
           }
         };
 
         recognition.start();
+        if (!isAgentSpeaking) {
+          statusPill.textContent = "🟢 Line Open • Speak naturally anytime (Auto-Detect)";
+          statusPill.className = "status-pill listening";
+        }
       } catch (e) {
         console.log("Mic start notice:", e);
       }
     }
 
-    function restartListening() {
-      if (recognition) {
-        try { recognition.stop(); } catch(e){}
-      }
-      setTimeout(startListeningHandsFree, 200);
-    }
-
     async function handleCustomerSpeech(text) {
-      statusPill.textContent = "⚡ Aarohi Thinking & Replying...";
-      statusPill.className = "status-pill speaking";
       appendBubble("customer", text);
 
       try {
@@ -713,12 +693,13 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             text: text,
-            language_hint: currentLang
+            language_hint: "auto"
           })
         });
 
         const data = await res.json();
-        appendBubble("ai", data.reply, `Language: ${data.language_name} | Intent: ${data.intent}`);
+        currentLang = data.language_code || "auto";
+        appendBubble("ai", data.reply, `AI Detected Language: ${data.language_name} | Intent: ${data.intent}`);
 
         if (data.action === "HANGUP") {
           playAudio(data.audio_url, () => {
@@ -730,18 +711,20 @@
             statusPill.textContent = "Connected to Sales Manager";
           });
         } else {
-          // Play response, then re-arm mic hands-free!
+          // Play response with barge-in enabled!
           playAudio(data.audio_url, () => {
             isProcessing = false;
+            isAgentSpeaking = false;
             if (isCallActive) {
-              startListeningHandsFree();
+              statusPill.textContent = "🟢 Aarohi Ready • Ask your next question...";
+              statusPill.className = "status-pill listening";
             }
           });
         }
       } catch (err) {
         console.error("Live Query error:", err);
         isProcessing = false;
-        if (isCallActive) startListeningHandsFree();
+        isAgentSpeaking = false;
       }
     }
 
@@ -757,12 +740,14 @@
     }
 
     function playAudio(url, onEndedCallback) {
+      isAgentSpeaking = true;
       audioPlayer.src = url + "?t=" + Date.now();
       audioPlayer.onended = () => {
+        isAgentSpeaking = false;
         if (onEndedCallback) onEndedCallback();
       };
       audioPlayer.play().catch(e => {
-        console.log("Audio play error", e);
+        isAgentSpeaking = false;
         if (onEndedCallback) onEndedCallback();
       });
     }

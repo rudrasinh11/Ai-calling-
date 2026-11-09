@@ -71,7 +71,7 @@ async def get_welcome_audio():
     """Serves instant pre-cached welcome greeting for Shashvat Jewels (0ms delay)."""
     out_file = os.path.join(AUDIO_DIR, "inbound_welcome.mp3")
     if not os.path.exists(out_file):
-        welcome_text = "Namaste! Welcome to Shashvat Jewels. How may I assist you with our diamond and gold collection today? Gujarati maate 1, Hindi ke liye 2, for English press 3, or simply start speaking!"
+        welcome_text = "Namaste! Welcome to Shashvat Jewels. How may I assist you with our diamond and gold collection today?"
         await tts_engine.synthesize_speech_file(welcome_text, out_file, "en")
     return {"audio_url": "/audio/inbound_welcome.mp3"}
 
