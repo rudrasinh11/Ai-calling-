@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shashvat Jewels Pvt Ltd - Real-Time AI Receptionist</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --gold-primary: #E5B842;
+      --gold-dark: #9E7D23;
+      --gold-glow: rgba(229, 184, 66, 0.25);
+      --bg-dark: #0A0D14;
+      --card-bg: #121824;
+      --border-color: #263042;
+      --text-main: #F3F6FA;
+      --text-dim: #8FA0B8;
+      --green-call: #1DB954;
+      --red-end: #E53935;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background: radial-gradient(circle at 50% -20%, #1A2436 0%, #0A0D14 100%);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px 14px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 16px;
+    }
+    header h1 {
+      font-family: 'Cinzel', serif;
+      font-size: 24px;
+      color: var(--gold-primary);
+      letter-spacing: 2px;
+    }
+    header p {
+      color: var(--text-dim);
+      font-size: 12px;
+      margin-top: 2px;
+    }
+
+    .main-grid {
+      width: 100%;
+      max-width: 1000px;
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      gap: 18px;
+    }
+
+    .inbound-phone {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 24px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.7);
+      position: relative;
+    }
+
+    .badge-live {
+      font-size: 10px;
+      font-weight: 700;
+      color: #38ef7d;
+      background: rgba(56, 239, 125, 0.12);
+      border: 1px solid rgba(56, 239, 125, 0.3);
+      padding: 3px 10px;
+      border-radius: 20px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 8px;
+    }
+
+    .avatar-icon {
+      width: 58px;
+      height: 58px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--gold-primary), var(--gold-dark));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      box-shadow: 0 4px 16px var(--gold-glow);
+      margin-bottom: 6px;
+    }
+
+    .receptionist-name {
+      font-family: 'Cinzel', serif;
+      font-size: 17px;
+      color: var(--text-main);
+    }
+    .receptionist-sub {
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+
+    /* 1-2-3 Keypad Buttons */
+    .keypad-container {
+      width: 100%;
+      margin: 12px 0 6px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .keypad-label {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--gold-primary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      text-align: center;
+    }
+    .keypad-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 6px;
+    }
+    .btn-keypad {
+      background: #0A0D14;
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      padding: 6px 4px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      transition: all 0.2s;
+    }
+    .btn-keypad span.key-num {
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--gold-primary);
+    }
+    .btn-keypad.selected {
+      background: rgba(229, 184, 66, 0.25);
+      border-color: var(--gold-primary);
+      box-shadow: 0 0 10px var(--gold-glow);
+    }
+
+    .status-pill {
+      margin-top: 6px;
+      padding: 4px 12px;
+      border-radius: 16px;
+      font-size: 11px;
+      font-weight: 600;
+      background: rgba(255,255,255,0.05);
+      color: var(--text-dim);
+      border: 1px solid var(--border-color);
+      text-align: center;
+      transition: all 0.3s;
+    }
+    .status-pill.connected {
+      background: rgba(29, 185, 84, 0.15);
+      color: #1DB954;
+      border-color: #1DB954;
+    }
+    .status-pill.listening {
+      background: rgba(56, 239, 125, 0.2);
+      color: #38ef7d;
+      border-color: #38ef7d;
+      animation: pulse 1.2s infinite;
+    }
+    .status-pill.speaking {
+      background: rgba(229, 184, 66, 0.2);
+      color: var(--gold-primary);
+      border-color: var(--gold-primary);
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.03); opacity: 0.85; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    .soundwave-box {
+      width: 100%;
+      height: 44px;
+      background: #0A0D14;
+      border-radius: 10px;
+      border: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      margin: 12px 0;
+    }
+    .wave-line {
+      width: 3.5px;
+      height: 6px;
+      background: var(--gold-primary);
+      border-radius: 2px;
+      transition: height 0.12s;
+    }
+
+    .call-btn-row {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 8px;
+    }
+    .circle-btn {
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      border: none;
+      font-size: 22px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .btn-green {
+      background: var(--green-call);
+      color: white;
+      box-shadow: 0 4px 18px rgba(29, 185, 84, 0.4);
+    }
+    .btn-green:hover { transform: scale(1.06); }
+    .btn-red {
+      background: var(--red-end);
+      color: white;
+      display: none;
+      box-shadow: 0 4px 18px rgba(229, 57, 53, 0.4);
+    }
+    .btn-red:hover { transform: scale(1.06); }
+
+    .live-mode-notice {
+      font-size: 10px;
+      color: #38ef7d;
+      font-weight: 600;
+      background: rgba(56, 239, 125, 0.1);
+      border-radius: 8px;
+      padding: 6px 10px;
+      margin-top: 6px;
+      text-align: center;
+    }
+
+    /* Database Catalog Cheat Sheet on the Right */
+    .right-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 24px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      height: 560px;
+    }
+
+    .card-tabs {
+      display: flex;
+      gap: 8px;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 10px;
+      margin-bottom: 12px;
+    }
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-dim);
+      font-size: 13px;
+      font-weight: 700;
+      padding: 4px 8px;
+      cursor: pointer;
+    }
+    .tab-btn.active {
+      color: var(--gold-primary);
+      border-bottom: 2px solid var(--gold-primary);
+    }
+
+    .transcript-window {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding-right: 4px;
+    }
+
+    .msg-bubble {
+      max-width: 85%;
+      padding: 10px 14px;
+      border-radius: 14px;
+      font-size: 12.5px;
+      line-height: 1.5;
+    }
+    .msg-customer {
+      align-self: flex-end;
+      background: #194627;
+      color: #E2F5E8;
+      border-bottom-right-radius: 4px;
+      border: 1px solid #238636;
+    }
+    .msg-ai {
+      align-self: flex-start;
+      background: #182030;
+      color: var(--text-main);
+      border: 1px solid var(--border-color);
+      border-bottom-left-radius: 4px;
+    }
+
+    /* Testing Cheat-Sheet Tab */
+    .cheat-sheet-content {
+      display: none;
+      flex: 1;
+      overflow-y: auto;
+      font-size: 11.5px;
+      color: var(--text-dim);
+      line-height: 1.6;
+    }
+    .cheat-sheet-content.active { display: block; }
+
+    .test-item-card {
+      background: #0A0D14;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+    }
+    .test-item-card strong { color: var(--gold-primary); }
+    .badge-sample {
+      display: inline-block;
+      font-size: 9.5px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: #1C2433;
+      color: var(--text-main);
+      margin-top: 4px;
+      cursor: pointer;
+    }
+
+    .rates-footer {
+      padding-top: 10px;
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-top: 10px;
+    }
+    .rates-footer strong { color: var(--gold-primary); }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>SHASHVAT JEWELS PVT LTD</h1>
+    <p>Diamond & Fine Jewellery Unit &bull; Live Hands-Free Calling Receptionist</p>
+  </header>
+
+  <div class="main-grid">
+    <!-- Phone Terminal -->
+    <div class="inbound-phone">
+      <div class="badge-live">● Live Calling Mode (Hands-Free)</div>
+      <div class="avatar-icon">💎</div>
+      <div class="receptionist-name">Aarohi</div>
+      <div class="receptionist-sub">Shashvat Jewels Receptionist</div>
+
+      <!-- 1-2-3 Language Keypad -->
+      <div class="keypad-container">
+        <div class="keypad-label">Language:</div>
+        <div class="keypad-row">
+          <button class="btn-keypad selected" id="key1" data-lang="gu">
+            <span class="key-num">1</span>
+            ગુજરાતી
+          </button>
+          <button class="btn-keypad" id="key2" data-lang="hi">
+            <span class="key-num">2</span>
+            हिंदी
+          </button>
+          <button class="btn-keypad" id="key3" data-lang="en">
+            <span class="key-num">3</span>
+            English
+          </button>
+        </div>
+      </div>
+
+      <div class="status-pill" id="statusPill">Line Ready &bull; Click Green Call Button</div>
+
+      <div class="soundwave-box" id="waveBox">
+        <div class="wave-line"></div><div class="wave-line"></div><div class="wave-line"></div>
+        <div class="wave-line"></div><div class="wave-line"></div><div class="wave-line"></div>
+        <div class="wave-line"></div><div class="wave-line"></div><div class="wave-line"></div>
+      </div>
+
+      <div class="call-btn-row">
+        <button class="circle-btn btn-green" id="btnCall" title="Call Store">📞</button>
+        <button class="circle-btn btn-red" id="btnEnd" title="Hangup">📵</button>
+      </div>
+
+      <div class="live-mode-notice">
+        ⚡ <strong>Hands-Free Active:</strong> No buttons to hold. Just talk naturally into your mic!
+      </div>
+
+      <!-- Quick Ask Input for Code-mixing / Testing -->
+      <div style="width:100%; display:flex; gap:6px; margin-top:8px;">
+        <input type="text" id="quickTextInput" placeholder="Or type e.g. 22k gold with 3 gram extra" style="flex:1; background:#0A0D14; border:1px solid var(--border-color); border-radius:8px; padding:6px 10px; color:white; font-size:11px; outline:none;">
+        <button id="btnQuickSend" style="background:#1C2433; border:1px solid var(--border-color); color:var(--gold-primary); padding:0 12px; border-radius:8px; cursor:pointer; font-size:11px; font-weight:700;">Send</button>
+      </div>
+    </div>
+
+    <!-- Right Side: Live Transcript + DB Catalog Cheat Sheet -->
+    <div class="right-card">
+      <div class="card-tabs">
+        <button class="tab-btn active" id="tabTranscript">Live Call Audio Transcript</button>
+        <button class="tab-btn" id="tabCheatSheet">📋 Database Test Items</button>
+        <button class="tab-btn" id="tabDbLogs">💾 Saved DB Conversations</button>
+      </div>
+
+      <!-- Transcript Tab -->
+      <div class="transcript-window" id="transcriptWindow">
+        <div class="msg-bubble msg-ai">
+          <strong>Aarohi (Receptionist):</strong><br>
+          Click the green call button to start your live phone call with Shashvat Jewels.
+        </div>
+      </div>
+
+      <!-- Cheat-Sheet Tab -->
+      <div class="cheat-sheet-content" id="cheatSheetContent">
+        <p style="margin-bottom:8px;">Speak any of these live questions to test the exact database answers:</p>
+
+        <div class="test-item-card">
+          <strong>1. Dynamic Weight Calculation (3 Grams Extra)</strong><br>
+          Ask: <em>"22k gold price with add 3 gram extra"</em> or <em>"3 gram sonana ketla thase?"</em><br>
+          <span class="badge-sample">Calculates live: 3g x ₹7,200 = ₹21,600</span>
+        </div>
+
+        <div class="test-item-card">
+          <strong>2. Today's Gold Rates</strong><br>
+          Ask: <em>"24 karat sonano bhav shu che?"</em> (Gujarati) or <em>"Aaj 22k sone ka kya rate hai?"</em> (Hindi)<br>
+          <span class="badge-sample">DB: 24K = ₹7,850/g | 22K = ₹7,200/g | 18K = ₹5,890/g</span>
+        </div>
+
+        <div class="test-item-card">
+          <strong>3. Solitaire Diamond Ring (1.00 Carat IGI Certified)</strong><br>
+          Ask: <em>"Diamond solitaire ring nu price shu che?"</em><br>
+          <span class="badge-sample">DB: 1.00 Carat CVD Round, VVS-EF, 18K Gold = ₹55,000</span>
+        </div>
+
+        <div class="test-item-card">
+          <strong>4. Bridal Peacock Antique Necklace (22K Hallmarked)</strong><br>
+          Ask: <em>"Bridal gold necklace available che?"</em><br>
+          <span class="badge-sample">DB: 22K Antique Peacock Necklace, 35 grams = ₹2,85,000</span>
+        </div>
+
+        <div class="test-item-card">
+          <strong>5. Diamond Tennis Bracelet (5.00 Carat CVD)</strong><br>
+          Ask: <em>"Tennis bracelet ka price kya hai?"</em><br>
+          <span class="badge-sample">DB: 5.00 Carat CVD Diamonds, 18K White Gold = ₹1,60,000</span>
+        </div>
+      </div>
+
+      <!-- DB Logs Tab -->
+      <div class="cheat-sheet-content" id="dbLogsContent">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <span>All conversation records saved in SQLite DB:</span>
+          <button id="btnRefreshLogs" style="background:#1C2433; border:1px solid var(--border-color); color:var(--gold-primary); padding:3px 8px; border-radius:6px; cursor:pointer; font-size:11px;">🔄 Refresh</button>
+        </div>
+        <div id="dbLogsList" style="display:flex; flex-direction:column; gap:8px;"></div>
+      </div>
+
+      <div class="rates-footer">
+        <span>24K: <strong>₹7,850/g</strong></span>
+        <span>22K: <strong>₹7,200/g</strong></span>
+        <span>18K: <strong>₹5,890/g</strong></span>
+        <span>Silver: <strong>₹95/g</strong></span>
+      </div>
+    </div>
+  </div>
+
+  <audio id="audioPlayer" style="display:none;"></audio>
+
+  <script>
+    let isCallActive = false;
+    let recognition = null;
+    let currentLang = "gu";
+    let isProcessing = false;
+
+    const btnCall = document.getElementById("btnCall");
+    const btnEnd = document.getElementById("btnEnd");
+    const statusPill = document.getElementById("statusPill");
+    const transcriptWindow = document.getElementById("transcriptWindow");
+    const audioPlayer = document.getElementById("audioPlayer");
+
+    const key1 = document.getElementById("key1");
+    const key2 = document.getElementById("key2");
+    const key3 = document.getElementById("key3");
+
+    const tabTranscript = document.getElementById("tabTranscript");
+    const tabCheatSheet = document.getElementById("tabCheatSheet");
+    const tabDbLogs = document.getElementById("tabDbLogs");
+    const cheatSheetContent = document.getElementById("cheatSheetContent");
+    const dbLogsContent = document.getElementById("dbLogsContent");
+    const dbLogsList = document.getElementById("dbLogsList");
+    const btnRefreshLogs = document.getElementById("btnRefreshLogs");
+
+    tabTranscript.addEventListener("click", () => {
+      tabTranscript.classList.add("active");
+      tabCheatSheet.classList.remove("active");
+      tabDbLogs.classList.remove("active");
+      transcriptWindow.style.display = "flex";
+      cheatSheetContent.classList.remove("active");
+      dbLogsContent.classList.remove("active");
+    });
+
+    tabCheatSheet.addEventListener("click", () => {
+      tabCheatSheet.classList.add("active");
+      tabTranscript.classList.remove("active");
+      tabDbLogs.classList.remove("active");
+      transcriptWindow.style.display = "none";
+      cheatSheetContent.classList.add("active");
+      dbLogsContent.classList.remove("active");
+    });
+
+    tabDbLogs.addEventListener("click", () => {
+      tabDbLogs.classList.add("active");
+      tabTranscript.classList.remove("active");
+      tabCheatSheet.classList.remove("active");
+      transcriptWindow.style.display = "none";
+      cheatSheetContent.classList.remove("active");
+      dbLogsContent.classList.add("active");
+      loadDbLogs();
+    });
+
+    btnRefreshLogs.addEventListener("click", loadDbLogs);
+
+    async function loadDbLogs() {
+      try {
+        const res = await fetch("/api/inbound-logs");
+        const logs = await res.json();
+        dbLogsList.innerHTML = "";
+        if (!logs || logs.length === 0) {
+          dbLogsList.innerHTML = "<div style='color:var(--text-dim); padding:10px;'>No conversation records logged yet.</div>";
+          return;
+        }
+        logs.forEach(item => {
+          const div = document.createElement("div");
+          div.className = "test-item-card";
+          div.innerHTML = `
+            <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+              <span style="color:var(--gold-primary); font-weight:700;">${item.inquiry_type || 'Inquiry'}</span>
+              <span style="color:var(--text-dim); font-size:10px;">${item.timestamp}</span>
+            </div>
+            <div style="margin-bottom:3px;"><strong>Caller:</strong> ${item.caller_query}</div>
+            <div><strong>Aarohi:</strong> ${item.receptionist_reply}</div>
+          `;
+          dbLogsList.appendChild(div);
+        });
+      } catch (e) {
+        console.log("DB Log fetch error:", e);
+      }
+    }
+
+    // 1-2-3 Keypad selection
+    function selectKeypadLang(lang) {
+      currentLang = lang;
+      [key1, key2, key3].forEach(btn => btn.classList.remove("selected"));
+      if (lang === "gu") key1.classList.add("selected");
+      if (lang === "hi") key2.classList.add("selected");
+      if (lang === "en") key3.classList.add("selected");
+
+      if (isCallActive) {
+        restartListening();
+      }
+    }
+
+    const btnQuickSend = document.getElementById("btnQuickSend");
+    const quickTextInput = document.getElementById("quickTextInput");
+
+    btnQuickSend.addEventListener("click", () => {
+      const q = quickTextInput.value.trim();
+      if (!q) return;
+      quickTextInput.value = "";
+      if (!isCallActive) {
+        btnCall.click();
+        setTimeout(() => handleCustomerSpeech(q), 800);
+      } else {
+        handleCustomerSpeech(q);
+      }
+    });
+
+    quickTextInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") btnQuickSend.click();
+    });
+
+    key1.addEventListener("click", () => selectKeypadLang("gu"));
+    key2.addEventListener("click", () => selectKeypadLang("hi"));
+    key3.addEventListener("click", () => selectKeypadLang("en"));
+
+    // Animate soundwave
+    setInterval(() => {
+      const bars = document.querySelectorAll(".wave-line");
+      bars.forEach(b => {
+        b.style.height = isCallActive ? `${Math.floor(Math.random() * 32) + 6}px` : "6px";
+      });
+    }, 120);
+
+    // Call Pickup (Hands-Free)
+    btnCall.addEventListener("click", async () => {
+      isCallActive = true;
+      btnCall.style.display = "none";
+      btnEnd.style.display = "flex";
+      statusPill.textContent = "Call Connected • Aarohi Welcoming...";
+      statusPill.className = "status-pill connected";
+
+      // Play pre-cached welcome audio
+      appendBubble("ai", "Namaste! Welcome to Shashvat Jewels. How may I assist you with our diamond and gold collection today? Gujarati maate 1, Hindi ke liye 2, for English press 3, or simply start speaking!");
+      
+      playAudio("/audio/inbound_welcome.mp3", () => {
+        // Once welcome finishes, immediately start listening hands-free!
+        if (isCallActive) {
+          startListeningHandsFree();
+        }
+      });
+    });
+
+    // Call Hangup
+    btnEnd.addEventListener("click", () => {
+      hangupCall("Call Ended by Caller");
+    });
+
+    function hangupCall(reason = "Call Disconnected") {
+      isCallActive = false;
+      isProcessing = false;
+      btnCall.style.display = "flex";
+      btnEnd.style.display = "none";
+      statusPill.textContent = reason;
+      statusPill.className = "status-pill";
+      if (recognition) {
+        try { recognition.stop(); } catch(e){}
+      }
+      if (audioPlayer) audioPlayer.pause();
+    }
+
+    // Hands-Free Speech Recognition Engine
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    function getSpeechLangCode() {
+      if (currentLang === "gu") return "gu-IN";
+      if (currentLang === "hi") return "hi-IN";
+      return "en-IN";
+    }
+
+    function startListeningHandsFree() {
+      if (!isCallActive || isProcessing) return;
+
+      if (!SpeechRecognition) {
+        alert("Please use Chrome or Edge browser for live hands-free calling.");
+        return;
+      }
+
+      try {
+        recognition = new SpeechRecognition();
+        recognition.lang = getSpeechLangCode();
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
+
+        statusPill.textContent = `🟢 Listening in ${currentLang === 'gu' ? 'Gujarati' : currentLang === 'hi' ? 'Hindi' : 'English'}... Speak now!`;
+        statusPill.className = "status-pill listening";
+
+        recognition.onresult = async (event) => {
+          const userSaid = event.results[0][0].transcript;
+          if (userSaid && userSaid.trim()) {
+            isProcessing = true;
+            try { recognition.stop(); } catch(e){}
+            await handleCustomerSpeech(userSaid);
+          }
+        };
+
+        recognition.onerror = (event) => {
+          if (isCallActive && !isProcessing) {
+            setTimeout(startListeningHandsFree, 500);
+          }
+        };
+
+        recognition.onend = () => {
+          if (isCallActive && !isProcessing) {
+            setTimeout(startListeningHandsFree, 300);
+          }
+        };
+
+        recognition.start();
+      } catch (e) {
+        console.log("Mic start notice:", e);
+      }
+    }
+
+    function restartListening() {
+      if (recognition) {
+        try { recognition.stop(); } catch(e){}
+      }
+      setTimeout(startListeningHandsFree, 200);
+    }
+
+    async function handleCustomerSpeech(text) {
+      statusPill.textContent = "⚡ Aarohi Thinking & Replying...";
+      statusPill.className = "status-pill speaking";
+      appendBubble("customer", text);
+
+      try {
+        const res = await fetch("/api/inbound-query", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text: text,
+            language_hint: currentLang
+          })
+        });
+
+        const data = await res.json();
+        appendBubble("ai", data.reply, `Language: ${data.language_name} | Intent: ${data.intent}`);
+
+        if (data.action === "HANGUP") {
+          playAudio(data.audio_url, () => {
+            hangupCall("Call Completed • Auto Hangup");
+          });
+        } else if (data.action === "TRANSFER_HUMAN") {
+          statusPill.textContent = "Transferring to Sales Manager (+91 98765 00000)...";
+          playAudio(data.audio_url, () => {
+            statusPill.textContent = "Connected to Sales Manager";
+          });
+        } else {
+          // Play response, then re-arm mic hands-free!
+          playAudio(data.audio_url, () => {
+            isProcessing = false;
+            if (isCallActive) {
+              startListeningHandsFree();
+            }
+          });
+        }
+      } catch (err) {
+        console.error("Live Query error:", err);
+        isProcessing = false;
+        if (isCallActive) startListeningHandsFree();
+      }
+    }
+
+    function appendBubble(sender, text, meta = "") {
+      const bubble = document.createElement("div");
+      bubble.className = `msg-bubble msg-${sender}`;
+      bubble.innerHTML = `<strong>${sender === "customer" ? "You (Caller)" : "Aarohi (Shashvat Jewels)"}:</strong><br>${text}`;
+      if (meta) {
+        bubble.innerHTML += `<div style="font-size:10px; color:var(--gold-primary); margin-top:3px;">${meta}</div>`;
+      }
+      transcriptWindow.appendChild(bubble);
+      transcriptWindow.scrollTop = transcriptWindow.scrollHeight;
+    }
+
+    function playAudio(url, onEndedCallback) {
+      audioPlayer.src = url + "?t=" + Date.now();
+      audioPlayer.onended = () => {
+        if (onEndedCallback) onEndedCallback();
+      };
+      audioPlayer.play().catch(e => {
+        console.log("Audio play error", e);
+        if (onEndedCallback) onEndedCallback();
+      });
+    }
+  </script>
+</body>
+</html>
