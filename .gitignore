@@ -1,0 +1,30 @@
+# Virtual environment
+venv/
+env/
+ENV/
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+pip_cache/
+
+# Sensitive environment variables
+.env
+
+# Large binaries & models
+models/
+livekit/livekit-server.exe
+
+# Temporary audio files
+audio_temp/*
+!audio_temp/.gitkeep
+
+# Database files
+database/*.db
+
+# IDE & OS files
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
