@@ -493,7 +493,7 @@
   <script>
     let isCallActive = false;
     let recognition = null;
-    let currentLang = "auto";
+    let currentSessionLang = "gu";   // Active conversation language ("gu", "en", "hi")
     let isProcessing = false;
     let isAgentSpeaking = false;
     let isWelcomePlaying = false;
@@ -753,6 +753,12 @@
     // Hands-Free Speech Recognition Engine
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
+    function getLocaleForSession() {
+      if (currentSessionLang === "en") return "en-IN";
+      if (currentSessionLang === "hi") return "hi-IN";
+      return "gu-IN";
+    }
+
     function startListeningHandsFree() {
       if (!isCallActive) return;
 
@@ -767,7 +773,8 @@
 
       try {
         recognition = new SpeechRecognition();
-        recognition.lang = "gu-IN";
+        // Dynamically match transcription language with current conversation language
+        recognition.lang = getLocaleForSession();
         recognition.interimResults = true;
         recognition.continuous = true;
         recognition.maxAlternatives = 1;
@@ -792,7 +799,7 @@
           }
 
           isProcessing = true;
-          statusPill.textContent = "⚡ Aarohi Thinking & Replying...";
+          statusPill.textContent = "⚡ Aarohi Listening & Thinking...";
           statusPill.className = "status-pill speaking";
           await handleCustomerSpeech(userSaid);
         };
@@ -811,7 +818,8 @@
 
         recognition.start();
         if (!isAgentSpeaking && !isWelcomePlaying) {
-          statusPill.textContent = "🟢 Line Open • Speak naturally anytime";
+          const langLabel = currentSessionLang === "en" ? "English" : (currentSessionLang === "hi" ? "Hindi" : "Gujarati");
+          statusPill.textContent = `🟢 Line Open • Speaking in ${langLabel}`;
           statusPill.className = "status-pill listening";
         }
       } catch (e) {
@@ -819,7 +827,7 @@
       }
     }
 
-    // Handles Speech with Ultra-Fast Response Time
+    // Handles Speech with Conversational Pacing and Slower, Clear Female Voice
     async function handleCustomerSpeech(text) {
       if (!text || text.trim().length < 2) {
         isProcessing = false;
@@ -840,44 +848,53 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             text: text,
-            language_hint: "auto",
+            language_hint: currentSessionLang, // Maintain persistent session language
             voice_mode: voiceEngine
           })
         });
 
         const data = await res.json();
         const latencyMs = Date.now() - tStart;
-        currentLang = data.language_code || "auto";
-        appendBubble("ai", data.reply, `AI Detected: ${data.language_name} | Latency: ${latencyMs}ms`);
+        
+        // Update persistent language
+        const prevLang = currentSessionLang;
+        currentSessionLang = data.language_code || currentSessionLang;
+        appendBubble("ai", data.reply, `AI Language: ${data.language_name} | Response: ${latencyMs}ms`);
 
         const onFinishedSpeaking = () => {
           isProcessing = false;
           isAgentSpeaking = false;
           lastAgentSpeechEndTime = Date.now();
           if (isCallActive) {
-            statusPill.textContent = "🟢 Aarohi Ready • Ask your next question...";
+            const langLabel = currentSessionLang === "en" ? "English" : (currentSessionLang === "hi" ? "Hindi" : "Gujarati");
+            statusPill.textContent = `🟢 Aarohi Ready • Listening (${langLabel})...`;
             statusPill.className = "status-pill listening";
             if (audioDeviceMode === "laptop") {
-              // Unmute mic immediately
               setTimeout(startListeningHandsFree, 200);
             }
           }
         };
 
-        if (data.action === "HANGUP") {
-          playAgentVoice(data.reply, data.audio_url, currentLang, () => {
-            hangupCall("Call Completed • Auto Hangup");
-          });
-        } else if (data.action === "TRANSFER_HUMAN") {
-          statusPill.textContent = "Transferring to Sales Manager (+91 98765 00000)...";
-          playAgentVoice(data.reply, data.audio_url, currentLang, () => {
-            statusPill.textContent = "Connected to Sales Manager";
-          });
-        } else {
-          statusPill.textContent = "🔊 Aarohi Answering...";
-          statusPill.className = "status-pill speaking";
-          playAgentVoice(data.reply, data.audio_url, currentLang, onFinishedSpeaking);
-        }
+        // Natural conversational pause: 450ms breathing room before answering
+        setTimeout(() => {
+          if (!isCallActive) return;
+
+          if (data.action === "HANGUP") {
+            playAgentVoice(data.reply, data.audio_url, currentSessionLang, () => {
+              hangupCall("Call Completed • Auto Hangup");
+            });
+          } else if (data.action === "TRANSFER_HUMAN") {
+            statusPill.textContent = "Transferring to Sales Manager (+91 98765 00000)...";
+            playAgentVoice(data.reply, data.audio_url, currentSessionLang, () => {
+              statusPill.textContent = "Connected to Sales Manager";
+            });
+          } else {
+            statusPill.textContent = "🔊 Aarohi Answering...";
+            statusPill.className = "status-pill speaking";
+            playAgentVoice(data.reply, data.audio_url, currentSessionLang, onFinishedSpeaking);
+          }
+        }, 450);
+
       } catch (err) {
         console.error("Live Query error:", err);
         isProcessing = false;
@@ -894,7 +911,48 @@
       }
     }
 
-    // Instant Browser TTS (0.05s latency)
+    // Selects strictly Female Receptionist Voice (Aarohi) across English, Gujarati & Hindi
+    function selectFemaleReceptionistVoice(langCode) {
+      const voices = window.speechSynthesis.getVoices();
+      if (!voices || voices.length === 0) return null;
+
+      const targetPrefix = (langCode === "gu" ? "gu" : (langCode === "hi" ? "hi" : "en"));
+
+      const isMale = (name) => {
+        const n = name.toLowerCase();
+        return n.includes("ravi") || n.includes("david") || n.includes("mark") || 
+               n.includes("george") || n.includes("richard") || n.includes("james") || 
+               n.includes("guy") || (n.includes("male") && !n.includes("female"));
+      };
+
+      const isFemale = (name) => {
+        const n = name.toLowerCase();
+        return n.includes("heera") || n.includes("neerja") || n.includes("swara") || 
+               n.includes("dhwani") || n.includes("zira") || n.includes("jenny") || 
+               n.includes("aria") || n.includes("kalpana") || n.includes("female") || 
+               n.includes("girl") || n.includes("woman") || n.includes("natural");
+      };
+
+      // 1. First priority: Exact language female voice
+      let match = voices.find(v => v.lang.toLowerCase().startsWith(targetPrefix) && isFemale(v.name) && !isMale(v.name));
+      if (match) return match;
+
+      // 2. Second priority: Any voice for that language that is NOT male
+      match = voices.find(v => v.lang.toLowerCase().startsWith(targetPrefix) && !isMale(v.name));
+      if (match) return match;
+
+      // 3. Third priority: Verified Indian female voice (Heera, Swara, Neerja)
+      match = voices.find(v => (v.lang.includes("IN") || v.lang.includes("in")) && isFemale(v.name) && !isMale(v.name));
+      if (match) return match;
+
+      // 4. Fourth priority: Standard Windows/Chrome clear female voice (Zira, Jenny, Aria)
+      match = voices.find(v => isFemale(v.name) && !isMale(v.name));
+      if (match) return match;
+
+      return voices.find(v => !isMale(v.name)) || voices[0];
+    }
+
+    // Instant Browser TTS (Strictly Female Voice, Calm, Slower Conversational Speed)
     function speakBrowserTTS(text, langCode, callback) {
       if (!window.speechSynthesis) {
         if (callback) callback();
@@ -910,12 +968,12 @@
       else if (langCode === "hi") utterance.lang = "hi-IN";
       else utterance.lang = "en-IN";
 
-      const voices = window.speechSynthesis.getVoices();
-      const targetVoice = voices.find(v => v.lang.startsWith(utterance.lang) || v.lang.replace('_', '-').startsWith(utterance.lang));
-      if (targetVoice) utterance.voice = targetVoice;
+      utterance.voice = selectFemaleReceptionistVoice(langCode);
 
-      utterance.rate = 1.05;
-      utterance.pitch = 1.0;
+      // Pacing: 0.88 is smooth, slightly slower, relaxed, and clear (NOT rushed)
+      utterance.rate = 0.88;
+      // Pitch: 1.12 delivers a warm, young female receptionist tone
+      utterance.pitch = 1.12;
 
       utterance.onend = () => {
         isAgentSpeaking = false;
@@ -946,6 +1004,7 @@
       isAgentSpeaking = true;
       currentAgentText = (spokenText || "").toLowerCase();
       audioPlayer.src = url + "?t=" + Date.now();
+      audioPlayer.playbackRate = 0.92; // Calm, relaxed audio playback
       audioPlayer.onended = () => {
         isAgentSpeaking = false;
         lastAgentSpeechEndTime = Date.now();

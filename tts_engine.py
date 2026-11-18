@@ -85,14 +85,14 @@ async def synthesize_speech_file(text: str, output_path: str, lang_code: str = "
             pass
 
     try:
-        communicate = edge_tts.Communicate(spoken_text, voice, rate="+2%", pitch="+0Hz")
+        communicate = edge_tts.Communicate(spoken_text, voice, rate="-6%", pitch="+2Hz")
         await communicate.save(cache_path)
         shutil.copyfile(cache_path, output_path)
         return output_path
     except Exception as e:
         print(f"[TTS Notice] Primary voice {voice} notice: {e}, falling back...")
         try:
-            communicate = edge_tts.Communicate(spoken_text, "en-IN-NeerjaNeural", rate="+2%")
+            communicate = edge_tts.Communicate(spoken_text, "en-IN-NeerjaNeural", rate="-6%", pitch="+2Hz")
             await communicate.save(output_path)
             return output_path
         except Exception as e2:

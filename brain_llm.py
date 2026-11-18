@@ -89,7 +89,16 @@ def get_inbound_response(prompt: str, lang: str = "gu"):
     action, intent = detect_inbound_action_and_intent(prompt)
     p_lower = prompt.lower()
 
-    # 1. Instant 0ms Actions: Hangup & Human Escalation
+    # 1. Instant 0ms Actions: Hangup, Escalation & Language Switch
+    if any(w in p_lower for w in ["speak in english", "speak english", "can you speak english", "can you speak in english", "talk in english", "ઇંગલિશ", "इंग्लिश"]):
+        return "Yes, I can certainly speak in English. How may I assist you with our gold and diamond jewellery today?", "CONTINUE", "Language Preference"
+
+    if any(w in p_lower for w in ["gujarati ma", "gujarati bolo", "ગુજરાતી બોલો", "speak in gujarati"]):
+        return "ચોક્કસ, હું આપની સાથે ગુજરાતીમાં વાત કરીશ. સોનાના ભાવ કે જ્વેલરી બાબતે શું જાણવું છે?", "CONTINUE", "Language Preference"
+
+    if any(w in p_lower for w in ["hindi mein", "hindi bolo", "हिंदी बोलो", "speak in hindi"]):
+        return "हाँ बिल्कुल, मैं आपसे हिंदी में बात करूँगी। शाश्वत ज्वेल्स में मैं आपकी क्या सहायता कर सकती हूँ?", "CONTINUE", "Language Preference"
+
     if action == "HANGUP":
         if lang == "gu":
             return "Shashvat Jewels ma call karva badal aabhar. Tamaro divas shubh rahe, aavjo!", "HANGUP", intent
@@ -135,7 +144,7 @@ def get_inbound_response(prompt: str, lang: str = "gu"):
             return f"Today's {'24K' if is_24k else '22K'} gold rate is ₹{int(chosen_rate)} per gram. For {weight_grams} grams, it will be approximately ₹{total_price:,}.", "CONTINUE", "Rate Calculation"
 
     # 3. Instant 0ms Daily Rates Inquiries (24k, 22k, silver)
-    is_asking_rate = any(k in prompt for k in ["भाव", "સોના", "સોનું", "રેટ", "ચાંદી", "ચાંદીનો", "સોનાનો"]) or any(k in p_lower for k in ["rate", "bhav", "price", "kimat", "sone ka", "gold rate", "chandi"])
+    is_asking_rate = any(k in prompt for k in ["भाव", "સોના", "સોનું", "રેટ", "ચાંદી", "ચાંદીનો", "સોનાનો", "પ્રાઇઝ", "પ્રાઈઝ", "ગોલ્ડ"]) or any(k in p_lower for k in ["rate", "bhav", "price", "kimat", "sone ka", "gold rate", "chandi", "gold price"])
     if is_asking_rate:
         if "24" in prompt:
             if lang == "gu":
@@ -143,14 +152,14 @@ def get_inbound_response(prompt: str, lang: str = "gu"):
             elif lang == "hi":
                 return f"Aaj चौबीस कैरेट शुद्ध सोने का रेट {int(rate_24k)} रुपये प्रति ग्राम है।", "CONTINUE", "Rate Inquiry"
             else:
-                return f"Today's 24K pure gold rate is ₹{int(rate_24k)} per gram.", "CONTINUE", "Rate Inquiry"
-        elif "22" in prompt:
+                return f"Today's 24K pure gold rate is ₹{int(rate_24k):,} per gram.", "CONTINUE", "Rate Inquiry"
+        elif "22" in prompt or "20" in prompt:
             if lang == "gu":
                 return f"Aaje બાવીસ કેરેટ સોનાનો ભાવ {int(rate_22k)} રૂપિયા પ્રતિ ગ્રામ છે.", "CONTINUE", "Rate Inquiry"
             elif lang == "hi":
                 return f"Aaj बाईस कैरेट सोने का रेट {int(rate_22k)} रुपये प्रति ग्राम है।", "CONTINUE", "Rate Inquiry"
             else:
-                return f"Today's 22K gold rate is ₹{int(rate_22k)} per gram.", "CONTINUE", "Rate Inquiry"
+                return f"Today's 22K gold rate is ₹{int(rate_22k):,} per gram.", "CONTINUE", "Rate Inquiry"
         elif "silver" in p_lower or "चांदी" in prompt or "ચાંદી" in prompt:
             if lang == "gu":
                 return f"Aaje ચાંદીનો ભાવ {int(rate_silver)} રૂપિયા પ્રતિ ગ્રામ છે.", "CONTINUE", "Rate Inquiry"

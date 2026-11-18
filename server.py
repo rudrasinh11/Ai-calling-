@@ -97,11 +97,19 @@ async def handle_inbound_query(req: InboundQueryRequest):
     raw_text = req.text.strip()
     hint = req.language_hint
 
-    # Determine language
-    if hint in ["gu", "hi", "en"]:
+    # 1. Check for explicit language requests first
+    lower = raw_text.lower()
+    if any(w in lower for w in ["english", "ઇંગલિશ", "इंग्लिश", "speak english", "speak in english", "talk in english", "can you speak english", "can you speak in english", "વોટ ઈઝ", "વોટ ઇઝ"]):
+        lang = "en"
+    elif any(w in lower for w in ["gujarati", "ગુજરાતી", "गुजराती", "gujarati ma", "gujarati bolo", "speak gujarati"]):
+        lang = "gu"
+    elif any(w in lower for w in ["hindi", "हिंदी", "હિન્દી", "hindi mein", "hindi bolo", "speak hindi"]):
+        lang = "hi"
+    elif hint in ["gu", "hi", "en"] and hint != "auto":
+        # Honor the ongoing active conversation language
         lang = hint
     else:
-        lower = raw_text.lower()
+        # Fallback keyword detection
         if any(w in lower for w in ["che", "bhav", "aaje", "shu", "tamare", "jovu", "kaho", "shukriya", "aavjo", "ketla", "thase", "sonana", "sonu", "karat", "gram", "ભાવ", "રેટ", "સોનું", "સોના"]):
             lang = "gu"
         elif any(w in lower for w in ["kya", "hai", "batao", "chahiye", "kitna", "kitne", "hoga", "namaste", "bhaiya", "sone", "sona", "सोना", "कैरेट", "भाव"]):
