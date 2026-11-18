@@ -408,8 +408,13 @@
         <button class="circle-btn btn-red" id="btnEnd" title="Hangup">📵</button>
       </div>
 
+      <!-- Instant Real-Time Interruption (Barge-In) Button -->
+      <button id="btnInterrupt" style="width:100%; display:none; background:rgba(229, 57, 53, 0.2); border:1px solid #E53935; color:#FF6B6B; font-size:11px; font-weight:700; padding:7px; border-radius:10px; cursor:pointer; margin-bottom:6px; animation:pulse 1s infinite;">
+        ✋ Tap or Press Spacebar to Interrupt Aarohi
+      </button>
+
       <div class="live-mode-notice">
-        ⚡ <strong>Hands-Free Active:</strong> No buttons to hold. Just talk naturally into your mic!
+        ⚡ <strong>Hands-Free Active:</strong> Interrupt anytime while Aarohi is talking!
       </div>
 
       <!-- Quick Ask Input for Code-mixing / Testing -->
@@ -636,7 +641,31 @@
       }
       isAgentSpeaking = false;
       isWelcomePlaying = false;
+      const btnInterrupt = document.getElementById("btnInterrupt");
+      if (btnInterrupt) btnInterrupt.style.display = "none";
     }
+
+    const btnInterrupt = document.getElementById("btnInterrupt");
+    if (btnInterrupt) {
+      btnInterrupt.addEventListener("click", () => {
+        if (isCallActive && isAgentSpeaking) {
+          stopAllAgentAudio();
+          statusPill.textContent = "🎙️ You interrupted • Aarohi listening...";
+          statusPill.className = "status-pill listening";
+        }
+      });
+    }
+
+    window.addEventListener("keydown", (e) => {
+      if (e.code === "Space" && e.target.tagName !== "INPUT" && e.target.tagName !== "TEXTAREA") {
+        e.preventDefault();
+        if (isCallActive && isAgentSpeaking) {
+          stopAllAgentAudio();
+          statusPill.textContent = "🎙️ You interrupted (Spacebar) • Aarohi listening...";
+          statusPill.className = "status-pill listening";
+        }
+      }
+    });
 
     // Animate soundwave
     setInterval(() => {
@@ -773,13 +802,30 @@
 
       try {
         recognition = new SpeechRecognition();
-        // Dynamically match transcription language with current conversation language
         recognition.lang = getLocaleForSession();
         recognition.interimResults = true;
         recognition.continuous = true;
         recognition.maxAlternatives = 1;
 
+        // INSTANT REAL-TIME BARGE-IN: If caller makes sound while agent is speaking, cut agent off immediately!
+        recognition.onspeechstart = () => {
+          if (isAgentSpeaking && !isWelcomePlaying) {
+            console.log("[BARGE-IN] Speech sound detected! Cutting off agent.");
+            stopAllAgentAudio();
+            statusPill.textContent = "🎙️ You are speaking • Aarohi listening...";
+            statusPill.className = "status-pill listening";
+          }
+        };
+
         recognition.onresult = async (event) => {
+          // If agent was talking and user spoke interim or final words, cut agent off immediately
+          if (isAgentSpeaking && !isWelcomePlaying) {
+            console.log("[BARGE-IN] Interrupted agent with live speech!");
+            stopAllAgentAudio();
+            statusPill.textContent = "🎙️ You are speaking • Aarohi listening...";
+            statusPill.className = "status-pill listening";
+          }
+
           let finalTranscript = "";
           for (let i = event.resultIndex; i < event.results.length; ++i) {
             if (event.results[i].isFinal) {
@@ -790,13 +836,8 @@
           const userSaid = finalTranscript.trim();
           if (!userSaid || isProcessing) return;
 
-          // Discard echo
+          // Discard self-echo
           if (isSelfEcho(userSaid)) return;
-
-          // Barge-in check (Headphone mode)
-          if (isAgentSpeaking) {
-            stopAllAgentAudio();
-          }
 
           isProcessing = true;
           statusPill.textContent = "⚡ Aarohi Listening & Thinking...";
@@ -805,14 +846,14 @@
         };
 
         recognition.onerror = (event) => {
-          if (isCallActive && !isProcessing && (!isAgentSpeaking || audioDeviceMode === "headphone")) {
-            setTimeout(startListeningHandsFree, 350);
+          if (isCallActive && !isProcessing) {
+            setTimeout(startListeningHandsFree, 300);
           }
         };
 
         recognition.onend = () => {
-          if (isCallActive && !isProcessing && (!isAgentSpeaking || audioDeviceMode === "headphone")) {
-            setTimeout(startListeningHandsFree, 250);
+          if (isCallActive && !isProcessing) {
+            setTimeout(startListeningHandsFree, 200);
           }
         };
 
@@ -827,16 +868,11 @@
       }
     }
 
-    // Handles Speech with Conversational Pacing and Slower, Clear Female Voice
+    // Handles Speech with Natural Conversational Speed & Real-Time Barge-In
     async function handleCustomerSpeech(text) {
       if (!text || text.trim().length < 2) {
         isProcessing = false;
         return;
-      }
-
-      // In Laptop Speaker Mode: Mute mic while agent speaks so speaker output is NEVER heard
-      if (audioDeviceMode === "laptop" && recognition) {
-        try { recognition.stop(); } catch(e){}
       }
 
       appendBubble("customer", text);
@@ -848,7 +884,7 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             text: text,
-            language_hint: currentSessionLang, // Maintain persistent session language
+            language_hint: currentSessionLang,
             voice_mode: voiceEngine
           })
         });
@@ -856,8 +892,6 @@
         const data = await res.json();
         const latencyMs = Date.now() - tStart;
         
-        // Update persistent language
-        const prevLang = currentSessionLang;
         currentSessionLang = data.language_code || currentSessionLang;
         appendBubble("ai", data.reply, `AI Language: ${data.language_name} | Response: ${latencyMs}ms`);
 
@@ -865,17 +899,15 @@
           isProcessing = false;
           isAgentSpeaking = false;
           lastAgentSpeechEndTime = Date.now();
+          if (btnInterrupt) btnInterrupt.style.display = "none";
           if (isCallActive) {
             const langLabel = currentSessionLang === "en" ? "English" : (currentSessionLang === "hi" ? "Hindi" : "Gujarati");
             statusPill.textContent = `🟢 Aarohi Ready • Listening (${langLabel})...`;
             statusPill.className = "status-pill listening";
-            if (audioDeviceMode === "laptop") {
-              setTimeout(startListeningHandsFree, 200);
-            }
           }
         };
 
-        // Natural conversational pause: 450ms breathing room before answering
+        // Fast, prompt response (80ms buffer)
         setTimeout(() => {
           if (!isCallActive) return;
 
@@ -891,15 +923,16 @@
           } else {
             statusPill.textContent = "🔊 Aarohi Answering...";
             statusPill.className = "status-pill speaking";
+            if (btnInterrupt) btnInterrupt.style.display = "block";
             playAgentVoice(data.reply, data.audio_url, currentSessionLang, onFinishedSpeaking);
           }
-        }, 450);
+        }, 80);
 
       } catch (err) {
         console.error("Live Query error:", err);
         isProcessing = false;
         isAgentSpeaking = false;
-        if (isCallActive) startListeningHandsFree();
+        if (btnInterrupt) btnInterrupt.style.display = "none";
       }
     }
 
@@ -952,7 +985,7 @@
       return voices.find(v => !isMale(v.name)) || voices[0];
     }
 
-    // Instant Browser TTS (Strictly Female Voice, Calm, Slower Conversational Speed)
+    // Instant Browser TTS (Strictly Female Voice, Natural Speaking Speed 1.02)
     function speakBrowserTTS(text, langCode, callback) {
       if (!window.speechSynthesis) {
         if (callback) callback();
@@ -962,6 +995,7 @@
       window.speechSynthesis.cancel();
       isAgentSpeaking = true;
       currentAgentText = (text || "").toLowerCase();
+      if (btnInterrupt) btnInterrupt.style.display = "block";
 
       const utterance = new SpeechSynthesisUtterance(text);
       if (langCode === "gu") utterance.lang = "gu-IN";
@@ -970,19 +1004,21 @@
 
       utterance.voice = selectFemaleReceptionistVoice(langCode);
 
-      // Pacing: 0.88 is smooth, slightly slower, relaxed, and clear (NOT rushed)
-      utterance.rate = 0.88;
+      // Pacing: 1.02 is natural, fluent, and crisp (NOT slow!)
+      utterance.rate = 1.02;
       // Pitch: 1.12 delivers a warm, young female receptionist tone
       utterance.pitch = 1.12;
 
       utterance.onend = () => {
         isAgentSpeaking = false;
         lastAgentSpeechEndTime = Date.now();
+        if (btnInterrupt) btnInterrupt.style.display = "none";
         if (callback) callback();
       };
       utterance.onerror = () => {
         isAgentSpeaking = false;
         lastAgentSpeechEndTime = Date.now();
+        if (btnInterrupt) btnInterrupt.style.display = "none";
         if (callback) callback();
       };
 
@@ -1003,21 +1039,25 @@
     function playAudio(url, onEndedCallback, spokenText = "") {
       isAgentSpeaking = true;
       currentAgentText = (spokenText || "").toLowerCase();
+      if (btnInterrupt) btnInterrupt.style.display = "block";
       audioPlayer.src = url + "?t=" + Date.now();
-      audioPlayer.playbackRate = 0.92; // Calm, relaxed audio playback
+      audioPlayer.playbackRate = 1.0; // Fluent natural playback
       audioPlayer.onended = () => {
         isAgentSpeaking = false;
         lastAgentSpeechEndTime = Date.now();
+        if (btnInterrupt) btnInterrupt.style.display = "none";
         if (onEndedCallback) onEndedCallback();
       };
       audioPlayer.onerror = () => {
         isAgentSpeaking = false;
         lastAgentSpeechEndTime = Date.now();
+        if (btnInterrupt) btnInterrupt.style.display = "none";
         if (onEndedCallback) onEndedCallback();
       };
       audioPlayer.play().catch(e => {
         isAgentSpeaking = false;
         lastAgentSpeechEndTime = Date.now();
+        if (btnInterrupt) btnInterrupt.style.display = "none";
         if (onEndedCallback) onEndedCallback();
       });
     }
