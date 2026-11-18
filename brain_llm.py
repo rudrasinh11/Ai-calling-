@@ -48,6 +48,11 @@ CRITICAL CONVERSATIONAL RULES:
    - If customer says goodbye/thank you/aavjo -> Wish them well in 1 short sentence.
    - If customer asks to speak with the manager -> Confirm transfer in 1 short sentence.
 
+4. STRICT ZERO-TOLERANCE PROFANITY RULE (NO GAALI / GAAD):
+   - You must NEVER generate, repeat, or validate any vulgar words, cuss words, or 'gaali'/'gaad' under ANY circumstances.
+   - If a caller is angry or uses abusive slang, maintain absolute dignity, warmth, and composure.
+   - Calmly defuse tension in polite, formal language asking them to speak respectfully.
+
 STORE KNOWLEDGE:
 {knowledge_base}
 """
@@ -88,6 +93,21 @@ def detect_inbound_action_and_intent(prompt: str):
 def get_inbound_response(prompt: str, lang: str = "gu"):
     action, intent = detect_inbound_action_and_intent(prompt)
     p_lower = prompt.lower()
+
+    # 0. Abuse / Gaad / Gaali Guardrail - Strictly Respectful De-escalation (No Gaali)
+    profanity_patterns = [
+        r'\bchutiya\b', r'\bgandu\b', r'\bmadarchod\b', r'\bbhosd\w*', r'\bharami\b',
+        r'\bkamina\b', r'\bsala\b', r'\bsale\b', r'\bgadheda\b', r'\blund\b', r'\bloda\b',
+        r'\blauda\b', r'\bfuck\w*', r'\bbitch\b', r'\bbastard\b', r'\bchod\b', r'\bkutta\b',
+        r'\bidiot\b', r'ગાંડુ', r'ચુતિયા', r'ભોસડી', r'હરામી', r'કમીના', r'સાલા', r'ગધેડા'
+    ]
+    if any(re.search(pat, p_lower) for pat in profanity_patterns):
+        if lang == "gu":
+            return "કૃપા કરીને નમ્રતાપૂર્વક વાત કરો. હું શાશ્વત જ્વેલર્સ તરફથી આપને પૂરી મદદ કરવા માટે અહીં છું.", "CONTINUE", "Polite De-escalation"
+        elif lang == "hi":
+            return "कृपया शालीनता और सम्मानपूर्वक बात करें। मैं शाश्वत ज्वेल्स में आपकी पूरी सहायता करने के लिए यहाँ हूँ।", "CONTINUE", "Polite De-escalation"
+        else:
+            return "I kindly request you to speak respectfully. I am here from Shashvat Jewels to assist you with care.", "CONTINUE", "Polite De-escalation"
 
     # 1. Instant 0ms Actions: Hangup, Escalation & Language Switch
     if any(w in p_lower for w in ["speak in english", "speak english", "can you speak english", "can you speak in english", "talk in english", "ઇંગલિશ", "इंग्लिश"]):

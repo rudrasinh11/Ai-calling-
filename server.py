@@ -2,6 +2,7 @@ import os
 import sys
 import uuid
 import json
+import re
 
 # Ensure UTF-8 output
 if sys.stdout and hasattr(sys.stdout, "reconfigure"):
@@ -87,6 +88,59 @@ async def get_welcome_audio():
         await tts_engine.synthesize_speech_file(welcome_text, out_file, "en")
     return {"audio_url": "/audio/inbound_welcome.mp3"}
 
+def detect_user_language(text: str, hint: str = "auto") -> str:
+    """
+    Intelligently detects language between English, Gujarati, and Hindi.
+    Correctly recognizes English queries even when transcribed by Gujarati STT phonetically.
+    """
+    raw = text.strip()
+    lower = raw.lower()
+
+    # 1. Explicit Language Switch Requests
+    if any(w in lower for w in ["english", "ઇંગલિશ", "इंग्लिश", "speak english", "speak in english", "talk in english", "can you speak english", "can you speak in english"]):
+        return "en"
+    if any(w in lower for w in ["gujarati", "ગુજરાતી", "गुजराती", "gujarati ma", "gujarati bolo", "speak gujarati"]):
+        return "gu"
+    if any(w in lower for w in ["hindi", "हिंदी", "હિન્દી", "hindi mein", "hindi bolo", "speak hindi"]):
+        return "hi"
+
+    # 2. Phonetic English in Gujarati Script (e.g. "વોટ ઈઝ ટૂ ડે ગોલ્ડ પ્રાઇઝ")
+    if any(w in raw for w in ["વોટ ઈઝ", "વોટ ઇઝ", "વોટ", "પ્રાઇઝ", "પ્રાઈઝ", "કેન યુ", "ગિવ મી"]):
+        return "en"
+
+    # 3. Gujarati Unique Indicators
+    gu_unique = [
+        "che", "chhe", "shu", "bhav", "aaje", "tamare", "ketla", "thase", "sonana",
+        "sonu", "aavjo", "kaho", "jovu", "છે", "શું", "ભાવ", "સોનું", "સોના",
+        "કેટલા", "થશે", "આજે", "તમારે", "આવજો", "મારે", "જોઈએ", "મળશે"
+    ]
+    if any(w in lower for w in gu_unique):
+        return "gu"
+
+    # 4. Hindi Unique Indicators
+    hi_unique = [
+        "kya", "hai", "batao", "chahiye", "kitna", "kitne", "hoga", "sone", "sona",
+        "chandi", "aaj", "kaise", "dukaan", "bhaiya", "namaste", "क्या", "है",
+        "बताओ", "चाहिए", "कितना", "कितने", "होगा", "सोना", "सोने", "चांदी", "दीजिए"
+    ]
+    if any(w in lower for w in hi_unique):
+        return "hi"
+
+    # 5. English Unique Indicators (not shared jewellery loan words)
+    en_unique = [
+        "what", "is", "today", "todays", "price", "how", "much", "can", "you",
+        "give", "me", "tell", "show", "hello", "hi", "hey", "please", "thank",
+        "available", "store", "shop", "address", "timing", "open", "close"
+    ]
+    if any(re.search(rf'\b{w}\b', lower) for w in en_unique):
+        return "en"
+
+    # 6. Fallback to conversation hint or Gujarati
+    if hint in ["gu", "hi", "en"] and hint != "auto":
+        return hint
+
+    return "gu"
+
 @app.post("/api/inbound-query")
 async def handle_inbound_query(req: InboundQueryRequest):
     """
@@ -97,25 +151,8 @@ async def handle_inbound_query(req: InboundQueryRequest):
     raw_text = req.text.strip()
     hint = req.language_hint
 
-    # 1. Check for explicit language requests first
-    lower = raw_text.lower()
-    if any(w in lower for w in ["english", "ઇંગલિશ", "इंग्लिश", "speak english", "speak in english", "talk in english", "can you speak english", "can you speak in english", "વોટ ઈઝ", "વોટ ઇઝ"]):
-        lang = "en"
-    elif any(w in lower for w in ["gujarati", "ગુજરાતી", "गुजराती", "gujarati ma", "gujarati bolo", "speak gujarati"]):
-        lang = "gu"
-    elif any(w in lower for w in ["hindi", "हिंदी", "હિન્દી", "hindi mein", "hindi bolo", "speak hindi"]):
-        lang = "hi"
-    elif hint in ["gu", "hi", "en"] and hint != "auto":
-        # Honor the ongoing active conversation language
-        lang = hint
-    else:
-        # Fallback keyword detection
-        if any(w in lower for w in ["che", "bhav", "aaje", "shu", "tamare", "jovu", "kaho", "shukriya", "aavjo", "ketla", "thase", "sonana", "sonu", "karat", "gram", "ભાવ", "રેટ", "સોનું", "સોના"]):
-            lang = "gu"
-        elif any(w in lower for w in ["kya", "hai", "batao", "chahiye", "kitna", "kitne", "hoga", "namaste", "bhaiya", "sone", "sona", "सोना", "कैरेट", "भाव"]):
-            lang = "hi"
-        else:
-            lang = "en"
+    # Accurately classify language for current utterance
+    lang = detect_user_language(raw_text, hint)
 
     # Process through Inbound Brain (Groq LLM or Resilient DB matcher)
     reply_text, action, intent = brain_llm.get_inbound_response(raw_text, lang)
