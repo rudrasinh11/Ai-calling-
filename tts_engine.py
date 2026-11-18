@@ -1,6 +1,8 @@
 import os
 import re
 import asyncio
+import hashlib
+import shutil
 import edge_tts
 
 VOICE_MAP = {
@@ -9,6 +11,10 @@ VOICE_MAP = {
     "en": "en-IN-NeerjaNeural",      # Indian English professional female
 }
 DEFAULT_VOICE = "gu-IN-DhwaniNeural"
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CACHE_DIR = os.path.join(BASE_DIR, "audio_temp", "cache")
+os.makedirs(CACHE_DIR, exist_ok=True)
 
 def get_voice_for_language(lang_code: str) -> str:
     if not lang_code:
@@ -58,6 +64,7 @@ def normalize_text_for_speech(text: str, lang_code: str = "gu") -> str:
 async def synthesize_speech_file(text: str, output_path: str, lang_code: str = "gu") -> str:
     """
     Synthesizes speech with natural phonetic word normalization and human conversational pacing.
+    Features instant disk-caching to return repeated sentences in 0.001 seconds!
     """
     if not text or not text.strip():
         text = "Namaste! Welcome to Shashvat Jewels."
@@ -65,14 +72,27 @@ async def synthesize_speech_file(text: str, output_path: str, lang_code: str = "
     spoken_text = normalize_text_for_speech(text, lang_code)
     voice = get_voice_for_language(lang_code)
 
+    # Cache key based on voice and spoken text
+    cache_hash = hashlib.md5(f"{voice}_{spoken_text}".encode("utf-8")).hexdigest()
+    cache_path = os.path.join(CACHE_DIR, f"{cache_hash}.mp3")
+
+    if os.path.exists(cache_path) and os.path.getsize(cache_path) > 500:
+        # Instant cache hit (0ms latency!)
+        try:
+            shutil.copyfile(cache_path, output_path)
+            return output_path
+        except Exception:
+            pass
+
     try:
-        communicate = edge_tts.Communicate(spoken_text, voice, rate="-3%", pitch="+0Hz")
-        await communicate.save(output_path)
+        communicate = edge_tts.Communicate(spoken_text, voice, rate="+2%", pitch="+0Hz")
+        await communicate.save(cache_path)
+        shutil.copyfile(cache_path, output_path)
         return output_path
     except Exception as e:
         print(f"[TTS Notice] Primary voice {voice} notice: {e}, falling back...")
         try:
-            communicate = edge_tts.Communicate(spoken_text, "en-IN-NeerjaNeural", rate="-3%")
+            communicate = edge_tts.Communicate(spoken_text, "en-IN-NeerjaNeural", rate="+2%")
             await communicate.save(output_path)
             return output_path
         except Exception as e2:

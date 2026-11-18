@@ -41,11 +41,12 @@ CRITICAL CONVERSATIONAL RULES:
      Calculate: 5 x 7,850 = ₹39,250.
      Reply: "Panch gram chovis karat sonano bhav 39,250 rupiya thase."
 
-3. KEEP IT CONVERSATIONAL & SIMPLE:
-   - 1 to 2 spoken sentences maximum.
-   - Do not sound like a machine. Use warm human words.
-   - If customer says goodbye/thank you/aavjo -> Politely wish them well and say goodbye.
-   - If customer asks to speak with the manager -> Politely transfer them to the sales manager.
+3. ULTRA-FAST VOICE CALL CONVERSATION (STRICT 1 SENTENCE):
+   - Answer in EXACTLY 1 crisp, natural, spoken sentence (under 15 words).
+   - Never output paragraphs, lists, bullet points, or multiple sentences.
+   - For prices: State the rate and calculated total directly in 1 short punchy sentence.
+   - If customer says goodbye/thank you/aavjo -> Wish them well in 1 short sentence.
+   - If customer asks to speak with the manager -> Confirm transfer in 1 short sentence.
 
 STORE KNOWLEDGE:
 {knowledge_base}
@@ -64,11 +65,11 @@ def query_groq(prompt: str, lang: str = "gu"):
     chat_completion = client.chat.completions.create(
         messages=[
             {"role": "system", "content": system},
-            {"role": "user", "content": f"Customer Language Preference: {lang}\nInbound Customer Query: {prompt}\nAarohi Spoken Reply:"}
+            {"role": "user", "content": f"Customer Language Preference: {lang}\nInbound Customer Query: {prompt}\nRule: Reply in exactly 1 short natural sentence for voice phone call.\nAarohi Spoken Reply:"}
         ],
         model="qwen/qwen3.8-27b",
-        temperature=0.3,
-        max_tokens=150,
+        temperature=0.2,
+        max_tokens=50,
     )
     return chat_completion.choices[0].message.content.strip()
 
@@ -86,46 +87,9 @@ def detect_inbound_action_and_intent(prompt: str):
 
 def get_inbound_response(prompt: str, lang: str = "gu"):
     action, intent = detect_inbound_action_and_intent(prompt)
-
-    # 1. Groq LPU with Qwen 27B handles calculations, mixed Gujarati/English, and natural conversational speech
-    try:
-        if os.environ.get("GROQ_API_KEY"):
-            groq_reply = query_groq(prompt, lang)
-            if groq_reply:
-                return groq_reply, action, intent
-    except Exception as e:
-        print(f"[Groq Processing Notice] {e}")
-
-    # 2. Local Fallback Math & Knowledge Engine
     p_lower = prompt.lower()
-    conn = jewellery_db.get_connection()
-    c = conn.cursor()
-    c.execute("SELECT metal, rate_per_gram FROM daily_rates;")
-    rates = {row["metal"]: row["rate_per_gram"] for row in c.fetchall()}
-    conn.close()
 
-    rate_22k = rates.get("gold_22k", 7200.0)
-    rate_24k = rates.get("gold_24k", 7850.0)
-
-    # Check for grams calculation (e.g. "3 gram", "5 gram", "10 gram")
-    gram_match = re.search(r'(\d+(?:\.\d+)?)\s*(?:gram|g|gm|ગ્રામ|ग्राम)', prompt, re.IGNORECASE)
-    weight_grams = float(gram_match.group(1)) if gram_match else None
-
-    if weight_grams:
-        # User specified weight
-        is_24k = "24" in prompt
-        chosen_rate = rate_24k if is_24k else rate_22k
-        carat_name_gu = "ચોવીસ કેરેટ" if is_24k else "બાવીસ કેરેટ"
-        carat_name_hi = "चौबीस कैरेट" if is_24k else "बाईस कैरेट"
-        total_price = int(weight_grams * chosen_rate)
-
-        if lang == "gu":
-            return f"Aaje {carat_name_gu} sonano bhav {int(chosen_rate)} rupiya prati gram che. {weight_grams} gram sonana lagbhag {total_price:,} rupiya thase.", "CONTINUE", "Rate Calculation"
-        elif lang == "hi":
-            return f"Aaj {carat_name_hi} sone ka rate {int(chosen_rate)} rupaye per gram hai. {weight_grams} gram sone ka total lagbhag {total_price:,} rupaye hoga.", "CONTINUE", "Rate Calculation"
-        else:
-            return f"Today's {'24K' if is_24k else '22K'} gold rate is ₹{int(chosen_rate)} per gram. For {weight_grams} grams, it will be approximately ₹{total_price:,}.", "CONTINUE", "Rate Calculation"
-
+    # 1. Instant 0ms Actions: Hangup & Human Escalation
     if action == "HANGUP":
         if lang == "gu":
             return "Shashvat Jewels ma call karva badal aabhar. Tamaro divas shubh rahe, aavjo!", "HANGUP", intent
@@ -142,12 +106,81 @@ def get_inbound_response(prompt: str, lang: str = "gu"):
         else:
             return "Certainly, please hold the line while I transfer your call to our sales manager.", "TRANSFER_HUMAN", intent
 
-    # General rate query without weight
+    # 2. Instant 0ms Exact Weight Calculations (e.g. "3 gram", "5 gram", "add 3 gram extra")
+    conn = jewellery_db.get_connection()
+    c = conn.cursor()
+    c.execute("SELECT metal, rate_per_gram FROM daily_rates;")
+    rates = {row["metal"]: row["rate_per_gram"] for row in c.fetchall()}
+    conn.close()
+
+    rate_22k = rates.get("gold_22k", 7200.0)
+    rate_24k = rates.get("gold_24k", 7850.0)
+    rate_silver = rates.get("silver", 95.0)
+
+    gram_match = re.search(r'(\d+(?:\.\d+)?)\s*(?:gram|g|gm|ગ્રામ|ग्राम)', prompt, re.IGNORECASE)
+    weight_grams = float(gram_match.group(1)) if gram_match else None
+
+    if weight_grams:
+        is_24k = "24" in prompt
+        chosen_rate = rate_24k if is_24k else rate_22k
+        carat_name_gu = "ચોવીસ કેરેટ" if is_24k else "બાવીસ કેરેટ"
+        carat_name_hi = "चौबीस कैरेट" if is_24k else "बाईस कैरेट"
+        total_price = int(weight_grams * chosen_rate)
+
+        if lang == "gu":
+            return f"Aaje {carat_name_gu} sonano bhav {int(chosen_rate)} rupiya prati gram che. {weight_grams} gram sonana lagbhag {total_price:,} rupiya thase.", "CONTINUE", "Rate Calculation"
+        elif lang == "hi":
+            return f"Aaj {carat_name_hi} sone ka rate {int(chosen_rate)} rupaye per gram hai. {weight_grams} gram sone ka total lagbhag {total_price:,} rupaye hoga.", "CONTINUE", "Rate Calculation"
+        else:
+            return f"Today's {'24K' if is_24k else '22K'} gold rate is ₹{int(chosen_rate)} per gram. For {weight_grams} grams, it will be approximately ₹{total_price:,}.", "CONTINUE", "Rate Calculation"
+
+    # 3. Instant 0ms Daily Rates Inquiries (24k, 22k, silver)
+    is_asking_rate = any(k in prompt for k in ["भाव", "સોના", "સોનું", "રેટ", "ચાંદી", "ચાંદીનો", "સોનાનો"]) or any(k in p_lower for k in ["rate", "bhav", "price", "kimat", "sone ka", "gold rate", "chandi"])
+    if is_asking_rate:
+        if "24" in prompt:
+            if lang == "gu":
+                return f"Aaje ચોવીસ કેરેટ શુદ્ધ સોનાનો ભાવ {int(rate_24k)} રૂપિયા પ્રતિ ગ્રામ છે.", "CONTINUE", "Rate Inquiry"
+            elif lang == "hi":
+                return f"Aaj चौबीस कैरेट शुद्ध सोने का रेट {int(rate_24k)} रुपये प्रति ग्राम है।", "CONTINUE", "Rate Inquiry"
+            else:
+                return f"Today's 24K pure gold rate is ₹{int(rate_24k)} per gram.", "CONTINUE", "Rate Inquiry"
+        elif "22" in prompt:
+            if lang == "gu":
+                return f"Aaje બાવીસ કેરેટ સોનાનો ભાવ {int(rate_22k)} રૂપિયા પ્રતિ ગ્રામ છે.", "CONTINUE", "Rate Inquiry"
+            elif lang == "hi":
+                return f"Aaj बाईस कैरेट सोने का रेट {int(rate_22k)} रुपये प्रति ग्राम है।", "CONTINUE", "Rate Inquiry"
+            else:
+                return f"Today's 22K gold rate is ₹{int(rate_22k)} per gram.", "CONTINUE", "Rate Inquiry"
+        elif "silver" in p_lower or "चांदी" in prompt or "ચાંદી" in prompt:
+            if lang == "gu":
+                return f"Aaje ચાંદીનો ભાવ {int(rate_silver)} રૂપિયા પ્રતિ ગ્રામ છે.", "CONTINUE", "Rate Inquiry"
+            elif lang == "hi":
+                return f"Aaj चांदी का रेट {int(rate_silver)} रुपये प्रति ग्राम है।", "CONTINUE", "Rate Inquiry"
+            else:
+                return f"Today's silver rate is ₹{int(rate_silver)} per gram.", "CONTINUE", "Rate Inquiry"
+        else:
+            if lang == "gu":
+                return f"Aaje બાવીસ કેરેટ સોનાનો ભાવ {int(rate_22k)} રૂપિયા અને ચોવીસ કેરેટનો {int(rate_24k)} રૂપિયા પ્રતિ ગ્રામ છે.", "CONTINUE", "Rate Inquiry"
+            elif lang == "hi":
+                return f"Aaj बाईस कैरेट सोने का रेट {int(rate_22k)} रुपये और चौबीस कैरेट का {int(rate_24k)} रुपये प्रति ग्राम है।", "CONTINUE", "Rate Inquiry"
+            else:
+                return f"Today's 22K gold rate is ₹{int(rate_22k)} per gram and 24K is ₹{int(rate_24k)} per gram.", "CONTINUE", "Rate Inquiry"
+
+    # 4. Groq LPU with Qwen 27B for dynamic conversations, diamonds, collections
+    try:
+        if os.environ.get("GROQ_API_KEY"):
+            groq_reply = query_groq(prompt, lang)
+            if groq_reply:
+                return groq_reply, action, intent
+    except Exception as e:
+        print(f"[Groq Processing Notice] {e}")
+
+    # 4. Local Fallback Math & Knowledge Engine
     if any(k in prompt for k in ["भाव", "સોના", "સોનું", "રેટ"]) or any(k in p_lower for k in ["rate", "bhav", "gold", "price"]):
         if lang == "gu":
             return f"Aaje બાવીસ કેરેટ sonano bhav {int(rate_22k)} rupiya ane ચોવીસ કેરેટ sonano {int(rate_24k)} rupiya prati gram che. Tamare ketla gram jewellery joveli che?", "CONTINUE", "Rate Inquiry"
         elif lang == "hi":
-            return f"Aaj बाईस कैरेट सोने का रेट {int(rate_22k)} रुपये और चौबीस कैरेट का {int(rate_24k)} रुपये प्रति ग्राम है। आपको कितने ग्राम की जानकारी चाहिए?", "CONTINUE", "Rate Inquiry"
+            return f"Aaj बाईस कैरेट सोने का रेट {int(rate_22k)} रुपये और चौबीस कैरेट का {int(rate_24k)} रुपये प्रति gram hai. Aapko kitne gram ki jankari chahiye?", "CONTINUE", "Rate Inquiry"
         else:
             return f"Today's 22K gold rate is ₹{int(rate_22k)} per gram, and 24K pure gold is ₹{int(rate_24k)} per gram. How many grams are you looking for?", "CONTINUE", "Rate Inquiry"
 

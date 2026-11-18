@@ -42,14 +42,26 @@ LANGUAGE_NAMES = {
 class InboundQueryRequest(BaseModel):
     text: str
     language_hint: str = "auto"
+    voice_mode: str = "fast"  # "fast" for instant browser speech (<0.5s), "studio" for Edge-TTS
 
 class KeySaveRequest(BaseModel):
     groq_api_key: str = ""
 
 @app.on_event("startup")
-def startup_event():
+async def startup_event():
     jewellery_db.init_db()
     print("[INBOUND RECEPTIONIST] Server live on Drive I: Port 8055")
+    
+    # Pre-cache clean welcome audio
+    welcome_path = os.path.join(AUDIO_DIR, "inbound_welcome.mp3")
+    if not os.path.exists(welcome_path) or os.path.getsize(welcome_path) == 0:
+        print("[STARTUP] Pre-synthesizing inbound_welcome.mp3...")
+        await tts_engine.synthesize_speech_file(
+            "Namaste! Welcome to Shashvat Jewels. How may I assist you with our diamond and gold collection today?",
+            welcome_path,
+            "gu"
+        )
+    print("[STARTUP] Audio cache ready.")
 
 @app.get("/", response_class=HTMLResponse)
 @app.get("/webphone", response_class=HTMLResponse)
@@ -78,8 +90,9 @@ async def get_welcome_audio():
 @app.post("/api/inbound-query")
 async def handle_inbound_query(req: InboundQueryRequest):
     """
-    Handles fast 1-second inbound caller text queries.
-    Detects language -> Queries DB -> Speaks back in same language via Edge-TTS.
+    Handles ultra-fast inbound caller text queries.
+    - If voice_mode == 'fast': Returns response in <0.5s for instant browser speech!
+    - If voice_mode == 'studio': Synthesizes high-fidelity Edge-TTS audio.
     """
     raw_text = req.text.strip()
     hint = req.language_hint
@@ -89,9 +102,9 @@ async def handle_inbound_query(req: InboundQueryRequest):
         lang = hint
     else:
         lower = raw_text.lower()
-        if any(w in lower for w in ["che", "bhav", "aaje", "shu", "tamare", "jovu", "kaho", "shukriya", "aavjo", "ભાવ", "રેટ", "સોનું"]):
+        if any(w in lower for w in ["che", "bhav", "aaje", "shu", "tamare", "jovu", "kaho", "shukriya", "aavjo", "ketla", "thase", "sonana", "sonu", "karat", "gram", "ભાવ", "રેટ", "સોનું", "સોના"]):
             lang = "gu"
-        elif any(w in lower for w in ["kya", "hai", "batao", "chahiye", "kitna", "namaste", "bhaiya", "sone", "सोना", "कैरेट", "भाव"]):
+        elif any(w in lower for w in ["kya", "hai", "batao", "chahiye", "kitna", "kitne", "hoga", "namaste", "bhaiya", "sone", "sona", "सोना", "कैरेट", "भाव"]):
             lang = "hi"
         else:
             lang = "en"
@@ -99,11 +112,14 @@ async def handle_inbound_query(req: InboundQueryRequest):
     # Process through Inbound Brain (Groq LLM or Resilient DB matcher)
     reply_text, action, intent = brain_llm.get_inbound_response(raw_text, lang)
 
-    # Synthesize Audio Speech using Natural Edge-TTS
-    temp_id = str(uuid.uuid4())[:8]
-    output_filename = f"reply_{temp_id}.mp3"
-    output_path = os.path.join(AUDIO_DIR, output_filename)
-    await tts_engine.synthesize_speech_file(reply_text, output_path, lang)
+    # Audio synthesis based on voice_mode
+    audio_url = ""
+    if req.voice_mode == "studio":
+        temp_id = str(uuid.uuid4())[:8]
+        output_filename = f"reply_{temp_id}.mp3"
+        output_path = os.path.join(AUDIO_DIR, output_filename)
+        await tts_engine.synthesize_speech_file(reply_text, output_path, lang)
+        audio_url = f"/audio/{output_filename}"
 
     # Log to Inbound Call Logs
     jewellery_db.log_inbound_call(
@@ -121,7 +137,7 @@ async def handle_inbound_query(req: InboundQueryRequest):
         "intent": intent,
         "language_code": lang,
         "language_name": LANGUAGE_NAMES.get(lang, lang.upper()),
-        "audio_url": f"/audio/{output_filename}"
+        "audio_url": audio_url
     }
 
 @app.post("/api/save-key")

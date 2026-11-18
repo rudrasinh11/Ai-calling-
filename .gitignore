@@ -10,6 +10,7 @@ __pycache__/
 pip_cache/
 
 # Sensitive environment variables
+.env
 
 # Large binaries & models
 models/
@@ -23,8 +24,7 @@ audio_temp/*
 database/*.db
 
 # IDE & OS files
+.vscode/
 .idea/
 Thumbs.db
 .DS_Store
-config.bat
-node_modules

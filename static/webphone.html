@@ -170,6 +170,24 @@
       100% { transform: scale(1); opacity: 1; }
     }
 
+    .mode-pill {
+      background: transparent;
+      border: 1px solid var(--border-color);
+      color: var(--text-dim);
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .mode-pill.active {
+      background: var(--gold-primary);
+      color: #0A0D14;
+      border-color: var(--gold-primary);
+      font-weight: 700;
+    }
+
     .soundwave-box {
       width: 100%;
       height: 44px;
@@ -352,6 +370,24 @@
       <div class="receptionist-name">Aarohi</div>
       <div class="receptionist-sub">Shashvat Jewels Receptionist</div>
 
+      <!-- Voice & Audio Device Controls -->
+      <div style="width:100%; display:flex; flex-direction:column; gap:6px; margin: 10px 0 4px 0;">
+        <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.03); padding:4px 8px; border-radius:8px; border:1px solid var(--border-color); font-size:11px;">
+          <span style="color:var(--text-dim);">⚡ Voice Latency:</span>
+          <div style="display:flex; gap:4px;">
+            <button id="btnVoiceFast" class="mode-pill active" title="Instant local speech in <0.5s">⚡ Fast (&lt;0.8s)</button>
+            <button id="btnVoiceStudio" class="mode-pill" title="High-fidelity Edge-TTS Neural Voice">🎙️ Studio</button>
+          </div>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.03); padding:4px 8px; border-radius:8px; border:1px solid var(--border-color); font-size:11px;">
+          <span style="color:var(--text-dim);">🛡️ Echo Protection:</span>
+          <div style="display:flex; gap:4px;">
+            <button id="btnDeviceLaptop" class="mode-pill active" title="Auto-mutes mic while agent speaks to prevent loopback">💻 Laptop Speaker</button>
+            <button id="btnDeviceHeadphones" class="mode-pill" title="Keeps mic open 100% of the time with barge-in">🎧 Headset</button>
+          </div>
+        </div>
+      </div>
+
       <!-- Instant Auto-Detect Mode -->
       <div class="auto-lang-badge">
         <span class="pulsing-dot">●</span>
@@ -460,12 +496,25 @@
     let currentLang = "auto";
     let isProcessing = false;
     let isAgentSpeaking = false;
+    let isWelcomePlaying = false;
+    let currentAgentText = "";
+    let lastAgentSpeechEndTime = 0;
+    let mediaStream = null;
+
+    // Configurable Modes
+    let voiceEngine = "fast";         // "fast" (<0.8s browser speech) or "studio" (Edge-TTS)
+    let audioDeviceMode = "laptop";   // "laptop" (Mute mic while agent speaks to eliminate echo) or "headphone" (Hands-free barge-in)
 
     const btnCall = document.getElementById("btnCall");
     const btnEnd = document.getElementById("btnEnd");
     const statusPill = document.getElementById("statusPill");
     const transcriptWindow = document.getElementById("transcriptWindow");
     const audioPlayer = document.getElementById("audioPlayer");
+
+    const btnVoiceFast = document.getElementById("btnVoiceFast");
+    const btnVoiceStudio = document.getElementById("btnVoiceStudio");
+    const btnDeviceLaptop = document.getElementById("btnDeviceLaptop");
+    const btnDeviceHeadphones = document.getElementById("btnDeviceHeadphones");
 
     const tabTranscript = document.getElementById("tabTranscript");
     const tabCheatSheet = document.getElementById("tabCheatSheet");
@@ -475,6 +524,31 @@
     const dbLogsList = document.getElementById("dbLogsList");
     const btnRefreshLogs = document.getElementById("btnRefreshLogs");
 
+    // Toggle Voice Mode
+    btnVoiceFast.addEventListener("click", () => {
+      voiceEngine = "fast";
+      btnVoiceFast.classList.add("active");
+      btnVoiceStudio.classList.remove("active");
+    });
+    btnVoiceStudio.addEventListener("click", () => {
+      voiceEngine = "studio";
+      btnVoiceStudio.classList.add("active");
+      btnVoiceFast.classList.remove("active");
+    });
+
+    // Toggle Device Mode
+    btnDeviceLaptop.addEventListener("click", () => {
+      audioDeviceMode = "laptop";
+      btnDeviceLaptop.classList.add("active");
+      btnDeviceHeadphones.classList.remove("active");
+    });
+    btnDeviceHeadphones.addEventListener("click", () => {
+      audioDeviceMode = "headphone";
+      btnDeviceHeadphones.classList.add("active");
+      btnDeviceLaptop.classList.remove("active");
+    });
+
+    // Tab Navigation
     tabTranscript.addEventListener("click", () => {
       tabTranscript.classList.add("active");
       tabCheatSheet.classList.remove("active");
@@ -543,11 +617,7 @@
         btnCall.click();
         setTimeout(() => handleCustomerSpeech(q), 600);
       } else {
-        if (isAgentSpeaking && audioPlayer && !audioPlayer.paused) {
-          audioPlayer.pause();
-          audioPlayer.currentTime = 0;
-          isAgentSpeaking = false;
-        }
+        stopAllAgentAudio();
         handleCustomerSpeech(q);
       }
     });
@@ -555,6 +625,18 @@
     quickTextInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") btnQuickSend.click();
     });
+
+    function stopAllAgentAudio() {
+      if (audioPlayer && !audioPlayer.paused) {
+        audioPlayer.pause();
+        audioPlayer.currentTime = 0;
+      }
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+      isAgentSpeaking = false;
+      isWelcomePlaying = false;
+    }
 
     // Animate soundwave
     setInterval(() => {
@@ -564,21 +646,48 @@
       });
     }, 120);
 
-    // Call Pickup (Instant Hands-Free + Smart Barge-In)
+    // Call Pickup (Echo-Proof Hands-Free)
     btnCall.addEventListener("click", async () => {
       isCallActive = true;
       btnCall.style.display = "none";
       btnEnd.style.display = "flex";
-      statusPill.textContent = "● Live Inbound Call • Speak naturally (Auto-Detect)";
-      statusPill.className = "status-pill connected";
+      statusPill.textContent = "🔊 Aarohi Greeting • Shashvat Jewels...";
+      statusPill.className = "status-pill speaking";
 
-      // Start listening IMMEDIATELY so caller can speak anytime
-      startListeningHandsFree();
+      // 1. Enable Hardware & Browser Acoustic Echo Cancellation (AEC)
+      try {
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+          mediaStream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true
+            }
+          });
+          console.log("[AEC] Hardware AEC engaged.");
+        }
+      } catch (err) {
+        console.log("[AEC Note] Software protection active:", err);
+      }
 
-      // Play pre-cached clean welcome audio
-      appendBubble("ai", "Namaste! Welcome to Shashvat Jewels. How may I assist you with our diamond and gold collection today?");
-      
-      playAudio("/audio/inbound_welcome.mp3");
+      // 2. Play Welcome Greeting with ZERO SELF-ECHO
+      // The microphone stays 100% OFF during the welcome note!
+      isWelcomePlaying = true;
+      isAgentSpeaking = true;
+      const welcomeText = "Namaste! Welcome to Shashvat Jewels. How may I assist you with our diamond and gold collection today?";
+      appendBubble("ai", welcomeText);
+
+      playAudio("/audio/inbound_welcome.mp3", () => {
+        isWelcomePlaying = false;
+        isAgentSpeaking = false;
+        lastAgentSpeechEndTime = Date.now();
+        if (isCallActive) {
+          statusPill.textContent = "🟢 Aarohi Listening • Speak naturally in Gujarati, Hindi, or English...";
+          statusPill.className = "status-pill listening";
+          // START LISTENING ONLY AFTER GREETING COMPLETELY FINISHES!
+          startListeningHandsFree();
+        }
+      }, welcomeText);
     });
 
     // Call Hangup
@@ -590,20 +699,58 @@
       isCallActive = false;
       isProcessing = false;
       isAgentSpeaking = false;
+      isWelcomePlaying = false;
       btnCall.style.display = "flex";
       btnEnd.style.display = "none";
       statusPill.textContent = reason;
       statusPill.className = "status-pill";
+      stopAllAgentAudio();
+
       if (recognition) {
         try { recognition.stop(); } catch(e){}
       }
-      if (audioPlayer) {
-        audioPlayer.pause();
-        audioPlayer.currentTime = 0;
+      if (mediaStream) {
+        try { mediaStream.getTracks().forEach(t => t.stop()); } catch(e){}
+        mediaStream = null;
       }
     }
 
-    // Hands-Free Speech Recognition Engine with SMART BARGE-IN
+    // Intelligent Echo & Reverb Rejection Filter
+    function isSelfEcho(transcript) {
+      if (!transcript) return true;
+      const clean = transcript.toLowerCase().trim();
+      if (!clean) return true;
+
+      if (isWelcomePlaying) {
+        return true; // Discard anything during welcome audio
+      }
+
+      if (isAgentSpeaking && currentAgentText) {
+        if (currentAgentText.includes(clean)) {
+          console.log("[ANTI-ECHO] Discarded agent voice echo:", clean);
+          return true;
+        }
+        const words = clean.split(/\s+/);
+        let matchCount = 0;
+        words.forEach(w => {
+          if (w.length > 2 && currentAgentText.includes(w)) matchCount++;
+        });
+        if (words.length > 0 && (matchCount / words.length) >= 0.5) {
+          console.log("[ANTI-ECHO] Discarded high-overlap echo:", clean);
+          return true;
+        }
+      }
+
+      if (Date.now() - lastAgentSpeechEndTime < 400) {
+        if (clean.length < 4 || ["che", "hai", "rupiya", "rate", "thase", "hoga", "shashvat"].includes(clean)) {
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+    // Hands-Free Speech Recognition Engine
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
     function startListeningHandsFree() {
@@ -620,32 +767,12 @@
 
       try {
         recognition = new SpeechRecognition();
-        // gu-IN captures Gujarati, Hindi, and English loan words
         recognition.lang = "gu-IN";
         recognition.interimResults = true;
         recognition.continuous = true;
         recognition.maxAlternatives = 1;
 
-        // SMART BARGE-IN: If caller starts speaking at ANY time, CUT AGENT OFF IMMEDIATELY!
-        recognition.onspeechstart = () => {
-          if (isAgentSpeaking && audioPlayer && !audioPlayer.paused) {
-            console.log("[BARGE-IN] Caller started speaking! Interrupted agent audio.");
-            audioPlayer.pause();
-            audioPlayer.currentTime = 0;
-            isAgentSpeaking = false;
-            statusPill.textContent = "🎙️ You are speaking • Aarohi listening...";
-            statusPill.className = "status-pill listening";
-          }
-        };
-
         recognition.onresult = async (event) => {
-          // If agent was talking, cut off immediately!
-          if (isAgentSpeaking && audioPlayer && !audioPlayer.paused) {
-            audioPlayer.pause();
-            audioPlayer.currentTime = 0;
-            isAgentSpeaking = false;
-          }
-
           let finalTranscript = "";
           for (let i = event.resultIndex; i < event.results.length; ++i) {
             if (event.results[i].isFinal) {
@@ -654,38 +781,58 @@
           }
 
           const userSaid = finalTranscript.trim();
-          if (userSaid && !isProcessing) {
-            isProcessing = true;
-            statusPill.textContent = "⚡ Aarohi Thinking & Replying...";
-            statusPill.className = "status-pill speaking";
-            await handleCustomerSpeech(userSaid);
+          if (!userSaid || isProcessing) return;
+
+          // Discard echo
+          if (isSelfEcho(userSaid)) return;
+
+          // Barge-in check (Headphone mode)
+          if (isAgentSpeaking) {
+            stopAllAgentAudio();
           }
+
+          isProcessing = true;
+          statusPill.textContent = "⚡ Aarohi Thinking & Replying...";
+          statusPill.className = "status-pill speaking";
+          await handleCustomerSpeech(userSaid);
         };
 
         recognition.onerror = (event) => {
-          if (isCallActive && !isProcessing) {
-            setTimeout(startListeningHandsFree, 300);
+          if (isCallActive && !isProcessing && (!isAgentSpeaking || audioDeviceMode === "headphone")) {
+            setTimeout(startListeningHandsFree, 350);
           }
         };
 
         recognition.onend = () => {
-          if (isCallActive && !isProcessing) {
-            setTimeout(startListeningHandsFree, 200);
+          if (isCallActive && !isProcessing && (!isAgentSpeaking || audioDeviceMode === "headphone")) {
+            setTimeout(startListeningHandsFree, 250);
           }
         };
 
         recognition.start();
-        if (!isAgentSpeaking) {
-          statusPill.textContent = "🟢 Line Open • Speak naturally anytime (Auto-Detect)";
+        if (!isAgentSpeaking && !isWelcomePlaying) {
+          statusPill.textContent = "🟢 Line Open • Speak naturally anytime";
           statusPill.className = "status-pill listening";
         }
       } catch (e) {
-        console.log("Mic start notice:", e);
+        console.log("Mic notice:", e);
       }
     }
 
+    // Handles Speech with Ultra-Fast Response Time
     async function handleCustomerSpeech(text) {
+      if (!text || text.trim().length < 2) {
+        isProcessing = false;
+        return;
+      }
+
+      // In Laptop Speaker Mode: Mute mic while agent speaks so speaker output is NEVER heard
+      if (audioDeviceMode === "laptop" && recognition) {
+        try { recognition.stop(); } catch(e){}
+      }
+
       appendBubble("customer", text);
+      const tStart = Date.now();
 
       try {
         const res = await fetch("/api/inbound-query", {
@@ -693,39 +840,95 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             text: text,
-            language_hint: "auto"
+            language_hint: "auto",
+            voice_mode: voiceEngine
           })
         });
 
         const data = await res.json();
+        const latencyMs = Date.now() - tStart;
         currentLang = data.language_code || "auto";
-        appendBubble("ai", data.reply, `AI Detected Language: ${data.language_name} | Intent: ${data.intent}`);
+        appendBubble("ai", data.reply, `AI Detected: ${data.language_name} | Latency: ${latencyMs}ms`);
+
+        const onFinishedSpeaking = () => {
+          isProcessing = false;
+          isAgentSpeaking = false;
+          lastAgentSpeechEndTime = Date.now();
+          if (isCallActive) {
+            statusPill.textContent = "🟢 Aarohi Ready • Ask your next question...";
+            statusPill.className = "status-pill listening";
+            if (audioDeviceMode === "laptop") {
+              // Unmute mic immediately
+              setTimeout(startListeningHandsFree, 200);
+            }
+          }
+        };
 
         if (data.action === "HANGUP") {
-          playAudio(data.audio_url, () => {
+          playAgentVoice(data.reply, data.audio_url, currentLang, () => {
             hangupCall("Call Completed • Auto Hangup");
           });
         } else if (data.action === "TRANSFER_HUMAN") {
           statusPill.textContent = "Transferring to Sales Manager (+91 98765 00000)...";
-          playAudio(data.audio_url, () => {
+          playAgentVoice(data.reply, data.audio_url, currentLang, () => {
             statusPill.textContent = "Connected to Sales Manager";
           });
         } else {
-          // Play response with barge-in enabled!
-          playAudio(data.audio_url, () => {
-            isProcessing = false;
-            isAgentSpeaking = false;
-            if (isCallActive) {
-              statusPill.textContent = "🟢 Aarohi Ready • Ask your next question...";
-              statusPill.className = "status-pill listening";
-            }
-          });
+          statusPill.textContent = "🔊 Aarohi Answering...";
+          statusPill.className = "status-pill speaking";
+          playAgentVoice(data.reply, data.audio_url, currentLang, onFinishedSpeaking);
         }
       } catch (err) {
         console.error("Live Query error:", err);
         isProcessing = false;
         isAgentSpeaking = false;
+        if (isCallActive) startListeningHandsFree();
       }
+    }
+
+    function playAgentVoice(text, audioUrl, langCode, callback) {
+      if (voiceEngine === "fast" || !audioUrl) {
+        speakBrowserTTS(text, langCode, callback);
+      } else {
+        playAudio(audioUrl, callback, text);
+      }
+    }
+
+    // Instant Browser TTS (0.05s latency)
+    function speakBrowserTTS(text, langCode, callback) {
+      if (!window.speechSynthesis) {
+        if (callback) callback();
+        return;
+      }
+
+      window.speechSynthesis.cancel();
+      isAgentSpeaking = true;
+      currentAgentText = (text || "").toLowerCase();
+
+      const utterance = new SpeechSynthesisUtterance(text);
+      if (langCode === "gu") utterance.lang = "gu-IN";
+      else if (langCode === "hi") utterance.lang = "hi-IN";
+      else utterance.lang = "en-IN";
+
+      const voices = window.speechSynthesis.getVoices();
+      const targetVoice = voices.find(v => v.lang.startsWith(utterance.lang) || v.lang.replace('_', '-').startsWith(utterance.lang));
+      if (targetVoice) utterance.voice = targetVoice;
+
+      utterance.rate = 1.05;
+      utterance.pitch = 1.0;
+
+      utterance.onend = () => {
+        isAgentSpeaking = false;
+        lastAgentSpeechEndTime = Date.now();
+        if (callback) callback();
+      };
+      utterance.onerror = () => {
+        isAgentSpeaking = false;
+        lastAgentSpeechEndTime = Date.now();
+        if (callback) callback();
+      };
+
+      window.speechSynthesis.speak(utterance);
     }
 
     function appendBubble(sender, text, meta = "") {
@@ -739,15 +942,23 @@
       transcriptWindow.scrollTop = transcriptWindow.scrollHeight;
     }
 
-    function playAudio(url, onEndedCallback) {
+    function playAudio(url, onEndedCallback, spokenText = "") {
       isAgentSpeaking = true;
+      currentAgentText = (spokenText || "").toLowerCase();
       audioPlayer.src = url + "?t=" + Date.now();
       audioPlayer.onended = () => {
         isAgentSpeaking = false;
+        lastAgentSpeechEndTime = Date.now();
+        if (onEndedCallback) onEndedCallback();
+      };
+      audioPlayer.onerror = () => {
+        isAgentSpeaking = false;
+        lastAgentSpeechEndTime = Date.now();
         if (onEndedCallback) onEndedCallback();
       };
       audioPlayer.play().catch(e => {
         isAgentSpeaking = false;
+        lastAgentSpeechEndTime = Date.now();
         if (onEndedCallback) onEndedCallback();
       });
     }
